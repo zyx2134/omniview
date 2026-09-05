@@ -1,0 +1,18 @@
+{
+  "id": "qmc-audio-player",
+  "name": "QQ Music Audio Player",
+  "version": "1.0.0",
+  "description": "Plays QQ Music encrypted audio formats (.qmc0, .qmcflac, .qmcogg) by XOR-decrypting and streaming to the browser audio player",
+  "type": "format",
+  "formats": ["qmc0", "qmcflac", "qmcogg", "qmc"],
+  "mimeTypes": ["application/octet-stream"],
+  "author": "Omniview",
+  "ui": {
+    "icon": "🎵",
+    "label": "QQ Audio",
+    "panel": "qmc-player.html"
+  },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

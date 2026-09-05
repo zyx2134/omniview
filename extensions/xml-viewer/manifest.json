@@ -1,0 +1,14 @@
+{
+  "id": "xml-viewer",
+  "name": "XML Viewer",
+  "version": "1.0.0",
+  "description": "Render and syntax-highlight XML files with tree view",
+  "type": "format",
+  "formats": ["xml"],
+  "mimeTypes": ["text/xml", "application/xml"],
+  "author": "Omniview",
+  "ui": { "icon": "📄", "label": "XML", "panel": "xml-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

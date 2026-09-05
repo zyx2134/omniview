@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>Base64</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; }
+    .toolbar button { background: #3e3e42; border: none; color: #ccc; padding: 3px 10px; border-radius: 2px; font-size: 10px; cursor: pointer; }
+    .toolbar button:hover { background: #505055; }
+    .toolbar button.active { background: #0078d4; color: #fff; }
+    .toolbar label { font-size: 10px; color: #888; }
+    .container { flex: 1; display: flex; overflow: hidden; }
+    .panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .panel-header { padding: 6px 12px; background: #252526; border-bottom: 1px solid #333; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    textarea { flex: 1; background: #1e1e1e; border: none; color: #d4d4d4; padding: 12px; font-family: "Consolas", monospace; font-size: 11px; resize: none; outline: none; line-height: 1.5; }
+    .split { width: 4px; background: #333; cursor: col-resize; }
+    .err { color: #e81123; font-size: 11px; padding: 4px 12px; background: rgba(232,17,35,0.1); }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toolbar">
+    <button id="encBtn" class="active">编码 →</button>
+    <button id="decBtn">← 解码</button>
+    <label style="margin-left:12px;">
+      <input type="checkbox" id="autoConvert" checked> 自动转换
+    </label>
+    <button id="copyBtn">复制结果</button>
+    <button id="clearBtn">清空</button>
+  </div>
+  <div class="container">
+    <div class="panel">
+      <div class="panel-header">输入</div>
+      <textarea id="input" placeholder="输入 Base64 或文本..."></textarea>
+    </div>
+    <div class="split"></div>
+    <div class="panel">
+      <div class="panel-header">输出</div>
+      <textarea id="output" readonly></textarea>
+    </div>
+  </div>
+  <div class="err" id="err"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'base64';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - Base64 Tool';
+
+    let mode = 'encode'; // 'encode' or 'decode'
+
+    function updateStats() {
+      const input = document.getElementById('input').value;
+      const output = document.getElementById('output').value;
+      document.getElementById('st').textContent = 
+        '输入: ' + input.length + ' 字符' + 
+        (output ? ', 输出: ' + output.length + ' 字符' : '');
+    }
+
+    function showError(msg) {
+      document.getElementById('err').textContent = msg;
+    }
+    function clearError() {
+      document.getElementById('err').textContent = '';
+    }
+
+    function convert() {
+      const input = document.getElementById('input').value.trim();
+      if (!input) { document.getElementById('output').value = ''; updateStats(); return; }
+      
+      try {
+        let result = '';
+        if (mode === 'encode') {
+          // Text to Base64
+          result = btoa(unescape(encodeURIComponent(input)));
+        } else {
+          // Base64 to Text
+          result = decodeURIComponent(escape(atob(input)));
+        }
+        document.getElementById('output').value = result;
+        clearError();
+      } catch (e) {
+        showError('转换错误: ' + e.message);
+      }
+      updateStats();
+    }
+
+    document.getElementById('encBtn').onclick = () => {
+      mode = 'encode';
+      document.getElementById('encBtn').classList.add('active');
+      document.getElementById('decBtn').classList.remove('active');
+      if (document.getElementById('autoConvert').checked) convert();
+    };
+    document.getElementById('decBtn').onclick = () => {
+      mode = 'decode';
+      document.getElementById('decBtn').classList.add('active');
+      document.getElementById('encBtn').classList.remove('active');
+      if (document.getElementById('autoConvert').checked) convert();
+    };
+    document.getElementById('autoConvert').onchange = () => {
+      if (document.getElementById('autoConvert').checked && document.getElementById('input').value) convert();
+    };
+    document.getElementById('input').oninput = () => {
+      if (document.getElementById('autoConvert').checked) convert();
+      else updateStats();
+    };
+    document.getElementById('copyBtn').onclick = () => {
+      const output = document.getElementById('output').value;
+      navigator.clipboard.writeText(output).then(() => {
+        document.getElementById('st').textContent += ' [已复制]';
+      });
+    };
+    document.getElementById('clearBtn').onclick = () => {
+      document.getElementById('input').value = '';
+      document.getElementById('output').value = '';
+      clearError();
+      updateStats();
+    };
+
+    async function load() {
+      if (fp) {
+        try {
+          const result = await window.omniview.readFile(fp);
+          if (result.success) {
+            document.getElementById('input').value = result.content;
+            if (document.getElementById('autoConvert').checked) convert();
+            else updateStats();
+          }
+        } catch (e) {
+          showError('读取文件失败: ' + e.message);
+        }
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

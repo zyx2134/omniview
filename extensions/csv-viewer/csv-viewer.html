@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>CSV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; }
+    .toolbar input { width: 120px; padding: 2px 6px; font-size: 11px; background: #333; border: 1px solid #444; color: #ccc; border-radius: 2px; }
+    table { flex: 1; width: 100%; border-collapse: collapse; overflow: auto; display: block; }
+    th, td { padding: 4px 10px; text-align: left; border-bottom: 1px solid #2a2a2a; font-size: 11px; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    th { background: #2d2d2d; color: #ccc; font-weight: 600; position: sticky; top: 0; z-index: 1; cursor: pointer; user-select: none; }
+    th:hover { background: #383838; }
+    th.sorted-asc::after { content: ' ▲'; font-size: 8px; }
+    th.sorted-dsc::after { content: ' ▼'; font-size: 8px; }
+    td { color: #ccc; }
+    tr:hover td { background: #2a2a2a; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+    .row-num { color: #666; font-size: 10px; min-width: 30px; text-align: right; padding-right: 8px; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="搜索...">
+  </div>
+  <div style="flex:1; overflow:auto;" id="container"></div>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'csv';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - CSV';
+
+    let headers = [];
+    let rows = [];
+    let sortCol = -1;
+    let sortAsc = true;
+
+    function parseCSV(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length === 0) return { headers: [], rows: [] };
+      
+      const delim = text.includes('\t') ? '\t' : ',';
+      const parseLine = (line) => {
+        const result = [];
+        let inQuote = false;
+        let current = '';
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') { inQuote = !inQuote; }
+          else if (c === delim && !inQuote) { result.push(current); current = ''; }
+          else { current += c; }
+        }
+        result.push(current);
+        return result;
+      };
+      
+      headers = parseLine(lines[0]);
+      rows = lines.slice(1).map(parseLine);
+      return { headers, rows };
+    }
+
+    function escapeHtml(s) { 
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); 
+    }
+
+    function renderTable(data) {
+      const container = document.getElementById('container');
+      let html = '<table><thead><tr>';
+      html += '<th class="row-num">#</th>';
+      data.headers.forEach((h, i) => {
+        const cls = sortCol === i ? (sortAsc ? 'sorted-asc' : 'sorted-dsc') : '';
+        html += '<th class="' + cls + '" data-col="' + i + '">' + escapeHtml(h) + '</th>';
+      });
+      html += '</tr></thead><tbody>';
+      
+      data.rows.forEach((row, ri) => {
+        html += '<tr>';
+        html += '<td class="row-num">' + (ri + 1) + '</td>';
+        data.headers.forEach((_, ci) => {
+          const val = row[ci] || '';
+          html += '<td>' + escapeHtml(val) + '</td>';
+        });
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table>';
+      container.innerHTML = html;
+      
+      // Sort handlers
+      container.querySelectorAll('th[data-col]').forEach(th => {
+        th.onclick = () => {
+          const col = parseInt(th.dataset.col);
+          if (sortCol === col) sortAsc = !sortAsc;
+          else { sortCol = col; sortAsc = true; }
+          renderFiltered();
+        };
+      });
+    }
+
+    function renderFiltered() {
+      const search = document.getElementById('search').value.toLowerCase();
+      let data = { headers, rows };
+      
+      if (sortCol >= 0) {
+        data.rows = [...data.rows].sort((a, b) => {
+          const va = (a[sortCol] || '').toLowerCase();
+          const vb = (b[sortCol] || '').toLowerCase();
+          return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+      }
+      
+      if (search) {
+        data.rows = data.rows.filter(row => 
+          row.some(cell => String(cell || '').toLowerCase().includes(search))
+        );
+      }
+      
+      renderTable(data);
+      document.getElementById('st').textContent = data.rows.length + ' rows, ' + data.headers.length + ' cols';
+    }
+
+    document.getElementById('search').oninput = renderFiltered;
+
+    async function load() {
+      try {
+        const result = await window.omniview.readFile(fp);
+        if (!result.success) throw new Error(result.error);
+        const parsed = parseCSV(result.content);
+        headers = parsed.headers;
+        rows = parsed.rows;
+        renderFiltered();
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

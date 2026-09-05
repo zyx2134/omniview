@@ -1,0 +1,10 @@
+﻿{
+  "id": "file-properties-panel",
+  "name": "File Properties Panel",
+  "version": "1.0.0",
+  "description": "Shows detailed file properties including size, dates, dimensions",
+  "type": "feature",
+  "author": "Omniview",
+  "ui": { "icon": "ℹ", "label": "Properties", "panel": "file-properties.html" },
+  "permissions": ["file:read", "file:stat"]
+}

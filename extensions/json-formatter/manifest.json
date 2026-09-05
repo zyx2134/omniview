@@ -1,0 +1,12 @@
+{
+  "id": "json-formatter",
+  "name": "JSON Formatter",
+  "version": "1.0.0",
+  "description": "Formats and syntax-highlights JSON files with tree view",
+  "type": "format",
+  "formats": ["json"],
+  "author": "Omniview",
+  "ui": { "icon": "\uD83D\uDCCD", "label": "JSON", "panel": "json-formatter.html" },
+  "config": { "indentSize": { "type": "number", "label": "Indent size", "default": 2, "min": 2, "max": 8 } },
+  "permissions": ["file:read"]
+}

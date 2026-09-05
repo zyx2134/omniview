@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+  <title>File Properties</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; overflow-y: auto; font-family: "Segoe UI", sans-serif; color: #cccccc; padding: 16px; }
+    .header { display: flex; align-items: center; gap: 12px; padding: 12px; background: #252526; border-radius: 6px; margin-bottom: 16px; }
+    .icon { width: 48px; height: 48px; background: #0078d4; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    .file-name { font-size: 14px; font-weight: 600; color: #ffffff; word-break: break-all; }
+    .file-ext { font-size: 11px; color: #888; margin-top: 2px; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .prop-table { width: 100%; border-collapse: collapse; }
+    .prop-table tr { border-bottom: 1px solid #2e2e2e; }
+    .prop-table tr:last-child { border-bottom: none; }
+    .prop-table td { padding: 6px 0; font-size: 12px; }
+    .prop-table td:first-child { color: #888; width: 40%; }
+    .prop-table td:last-child { color: #cccccc; word-break: break-all; }
+    .loading { display: flex; align-items: center; justify-content: center; height: 200px; color: #666; font-size: 13px; }
+    .error { display: flex; align-items: center; justify-content: center; height: 200px; color: #e81123; font-size: 13px; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">Loading file properties...</div>
+  </div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'unknown';
+    const ext = name.split('.').pop().toUpperCase();
+
+    function fmtSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 2 : 0) + ' ' + units[i];
+    }
+
+    function fmtDate(d) {
+      if (!d) return 'N/A';
+      return new Date(d).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    }
+
+    function render(data) {
+      const app = document.getElementById('app');
+      const showDims = data.showDimensions !== false;
+      const showDates = data.showDates !== false;
+
+      let html = `
+        <div class="header">
+          <div class="icon">${ext === 'MP4' || ext === 'MKV' || ext === 'AVI' ? '🎬' : ext === 'MP3' || ext === 'WAV' || ext === 'FLAC' ? '🎵' : ext === 'PNG' || ext === 'JPG' || ext === 'GIF' || ext === 'WEBP' ? '🖼️' : '📄'}</div>
+          <div>
+            <div class="file-name">${name}</div>
+            <div class="file-ext">${ext} File · ${fmtSize(data.size)}</div>
+          </div>
+        </div>
+      `;
+
+      html += `<div class="section"><div class="section-title">General</div><table class="prop-table">`;
+      html += `<tr><td>Name</td><td>${name}</td></tr>`;
+      html += `<tr><td>Size</td><td>${fmtSize(data.size)} (${data.size.toLocaleString()} bytes)</td></tr>`;
+      if (showDates && data.modified) html += `<tr><td>Modified</td><td>${fmtDate(data.modified)}</td></tr>`;
+      if (showDates && data.created) html += `<tr><td>Created</td><td>${fmtDate(data.created)}</td></tr>`;
+      if (showDates && data.accessed) html += `<tr><td>Accessed</td><td>${fmtDate(data.accessed)}</td></tr>`;
+      html += `</table></div>`;
+
+      if (data.dimensions) {
+        html += `<div class="section"><div class="section-title">Media</div><table class="prop-table">`;
+        html += `<tr><td>Dimensions</td><td>${data.dimensions.width} x ${data.dimensions.height} px</td></tr>`;
+        if (data.duration) html += `<tr><td>Duration</td><td>${data.duration.toFixed(2)}s</td></tr>`;
+        if (data.mimeType) html += `<tr><td>MIME Type</td><td>${data.mimeType}</td></tr>`;
+        html += `</table></div>`;
+      }
+
+      if (data.error) {
+        html += `<div class="error"><div>${data.error}</div><div style="font-size:11px;color:#666">Could not read all properties</div></div>`;
+      }
+
+      app.innerHTML = html;
+    }
+
+    // Get file stats using Node.js via main process IPC
+    if (typeof window.omniview !== 'undefined' && window.omniview.readFile) {
+      // Try to get file stats via IPC
+      const getFileStats = () => {
+        return new Promise((resolve) => {
+          // Use a simple approach: send a custom IPC message
+          window.omniview._internalGetFileStats(fp).then(resolve).catch(() => resolve(null));
+        });
+      };
+
+      // Fallback: try to get info from the file itself
+      const getFileInfo = async () => {
+        try {
+          const content = await window.omniview.readFile(fp);
+          if (!content.success) throw new Error(content.error);
+
+          const stats = {
+            name: name,
+            ext: ext,
+            size: content.size || content.content.length,
+            modified: content.mtime,
+            created: content.ctime,
+            accessed: content.atime,
+          };
+
+          // Try to detect image dimensions
+          if (['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'BMP'].includes(ext)) {
+            try {
+              const bytes = new Uint8Array(content.content);
+              if (ext === 'PNG' && bytes[0] === 0x89) {
+                stats.dimensions = { width: (bytes[16] << 8 | bytes[17]), height: (bytes[20] << 8 | bytes[21]) };
+              } else if ((ext === 'JPG' || ext === 'JPEG') && bytes[0] === 0xFF && bytes[1] === 0xD8) {
+                // Simple JPEG dimension parsing
+                let i = 2;
+                while (i < bytes.length - 1) {
+                  if (bytes[i] === 0xFF && (bytes[i+1] === 0xC0 || bytes[i+1] === 0xC2)) {
+                    stats.dimensions = {
+                      width: bytes[i+7] << 8 | bytes[i+8],
+                      height: bytes[i+5] << 8 | bytes[i+6]
+                    };
+                    break;
+                  }
+                  i++;
+                }
+              }
+            } catch(e) {}
+          }
+
+          // Try to detect video/audio duration
+          if (['MP4', 'MKV', 'AVI', 'MOV', 'MP3', 'WAV'].includes(ext)) {
+            stats.mimeType = `video/${ext.toLowerCase() === 'mp4' ? 'mp4' : ext.toLowerCase()}`;
+          }
+
+          return stats;
+        } catch(e) {
+          return { error: e.message };
+        }
+      };
+
+      getFileInfo().then(render);
+    } else {
+      // No IPC available, show basic info
+      render({ name, ext, size: 'Unknown', error: 'IPC bridge not available' });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "id": "base64-tool",
+  "name": "Base64 Tool",
+  "version": "1.0.0",
+  "description": "Encode/decode Base64 data with file support",
+  "type": "format",
+  "formats": ["b64", "base64"],
+  "mimeTypes": ["text/plain"],
+  "author": "Omniview",
+  "ui": { "icon": "🔤", "label": "Base64", "panel": "base64-tool.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

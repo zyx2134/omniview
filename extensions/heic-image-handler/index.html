@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>HEIC 图片查看器</title>
+  <style>
+    body { background: #1a1a1a; color: #e8e8e8; margin: 0; padding: 20px; font-family: sans-serif; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h2 { margin-bottom: 16px; }
+    img { max-width: 100%; border-radius: 8px; }
+    .info { color: #999; font-size: 13px; margin-top: 12px; }
+    .no-support { color: #e05555; padding: 40px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🖼️ HEIC 图片查看器</h2>
+    <div id="content">加载中...</div>
+    <div class="info">由 Omniview HEIC 扩展提供</div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const filePath = params.get('file');
+    const content = document.getElementById('content');
+
+    if (filePath) {
+      // In a real implementation, use a WASM decoder or native bridge
+      content.innerHTML = `
+        <div class="no-support">
+          <p>HEIC 解码需要额外的 WASM 或原生库</p>
+          <p style="margin-top:8px;font-size:12px;">请安装包含解码器的完整扩展包</p>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

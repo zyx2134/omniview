@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>EXIF</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .content { flex: 1; overflow: auto; padding: 16px; display: flex; gap: 16px; }
+    .preview { flex: 0 0 300px; display: flex; flex-direction: column; gap: 8px; }
+    .preview img { max-width: 100%; border-radius: 4px; border: 1px solid #333; }
+    .preview-info { font-size: 10px; color: #666; }
+    .exif { flex: 1; overflow: auto; }
+    .exif-section { margin-bottom: 16px; }
+    .exif-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #333; }
+    .exif-row { display: flex; padding: 4px 0; border-bottom: 1px solid #252525; }
+    .exif-key { width: 160px; font-size: 11px; color: #9cdcfe; flex-shrink: 0; }
+    .exif-val { font-size: 11px; color: #d4d4d4; word-break: break-all; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+    .thumb { width: 100%; height: 200px; object-fit: contain; border-radius: 4px; border: 1px solid #333; background: #0d0d0d; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="content" id="content">
+    <div class="preview">
+      <img class="thumb" id="thumb" src="" alt="">
+      <div class="preview-info" id="previewInfo"></div>
+    </div>
+    <div class="exif" id="exif">
+      <div class="loading" style="color:#666;padding:20px;">正在解析 EXIF...</div>
+    </div>
+  </div>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'image';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - EXIF';
+
+    const EXIF_TAGS = {
+      0x0100: 'ImageWidth', 0x0101: 'ImageLength', 0x0102: 'BitsPerSample',
+      0x0103: 'Compression', 0x0106: 'PhotometricInterpretation',
+      0x0112: 'Orientation', 0x011A: 'XResolution', 0x011B: 'YResolution',
+      0x0128: 'ResolutionUnit', 0x0131: 'Software', 0x0132: 'DateTime',
+      0x013B: 'Artist', 0x0213: 'YCbCrPositioning', 0x02BC: 'WhitePoint',
+      0x829A: 'ExposureTime', 0x829D: 'FNumber', 0x8822: 'ExposureProgram',
+      0x8824: 'SpectralSensitivity', 0x8827: 'ISOSpeedRatings',
+      0x8828: 'OECF', 0x9000: 'ExifVersion', 0x9003: 'DateTimeOriginal',
+      0x9004: 'DateTimeDigitized', 0x9101: 'ComponentConfiguration',
+      0x9102: 'CompressedBitsPerPixel', 0x9201: 'ShutterSpeedValue',
+      0x9202: 'ApertureValue', 0x9203: 'BrightnessValue', 0x9204: 'ExposureBias',
+      0x9205: 'MaxApertureValue', 0x9206: 'SubjectDistance',
+      0x9207: 'MeteringMode', 0x9208: 'LightSource', 0x9209: 'Flash',
+      0x920A: 'FocalLength', 0x9214: 'SubjectArea', 0x9286: 'UserComment',
+      0x9290: 'SubsecTime', 0x9291: 'SubsecTimeOriginal', 0x9292: 'SubsecTimeDigitized',
+      0xA001: 'ColorSpace', 0xA002: 'PixelXDimension', 0xA003: 'PixelYDimension',
+      0xA004: 'RelatedSoundFile', 0xA20B: 'FlashEnergy', 0xA20C: 'SpatialFrequencyResponse',
+      0xA20E: 'FocalPlaneXResolution', 0xA20F: 'FocalPlaneYResolution',
+      0xA210: 'FocalPlaneResolutionUnit', 0xA214: 'SubjectLocation',
+      0xA215: 'ExposureIndex', 0xA217: 'SensingMethod', 0xA300: 'FileSource',
+      0xA301: 'SceneType', 0xA401: 'CustomRendered', 0xA402: 'ExposureMode',
+      0xA403: 'WhiteBalance', 0xA404: 'DigitalZoomRatio', 0xA405: 'FocalLengthIn35mm',
+      0xA406: 'SceneCaptureType', 0xA407: 'GainControl', 0xA408: 'Contrast',
+      0xA409: 'Saturation', 0xA40A: 'Sharpness', 0xA40B: 'DeviceSettingDescription',
+      0xA40C: 'SubjectDistanceRange', 0xA420: 'ImageUniqueID',
+      0x8825: 'GPSInfo'
+    };
+
+    function escapeHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function readUInt16(buf, offset, le) {
+      return le ? buf[offset] | (buf[offset+1] << 8) : (buf[offset] << 8) | buf[offset+1];
+    }
+    function readUInt32(buf, offset, le) {
+      return le ? buf[offset] | (buf[offset+1] << 8) | (buf[offset+2] << 16) | (buf[offset+3] << 24)
+                : (buf[offset] << 24) | (buf[offset+1] << 16) | (buf[offset+2] << 8) | buf[offset+3];
+    }
+
+    function parseExifData(dataView, ifdOffset, data) {
+      const entries = [];
+      const numEntries = dataView.getUint16(ifdOffset, true);
+      
+      for (let i = 0; i < numEntries; i++) {
+        const entryOffset = ifdOffset + 2 + i * 12;
+        const tag = dataView.getUint16(entryOffset, true);
+        const type = dataView.getUint16(entryOffset + 2, true);
+        const count = dataView.getUint32(entryOffset + 4, true);
+        let value;
+        
+        if (count <= 4) {
+          value = dataView.getUint32(entryOffset + 8, true);
+        } else {
+          const ptr = dataView.getUint32(entryOffset + 8, true);
+          if (ptr >= data.byteLength) continue;
+          value = ptr;
+        }
+        
+        entries.push({ tag, type, count, value });
+      }
+      return entries;
+    }
+
+    function getValueString(entry) {
+      const { tag, type, count, value } = entry;
+      const tagNames = EXIF_TAGS[tag] || '0x' + tag.toString(16).toUpperCase();
+      
+      let str = '';
+      if (type === 1) { // BYTE
+        str = count <= 4 ? (value & 0xFF) : 'Array(' + count + ')';
+      } else if (type === 2) { // ASCII
+        str = String.fromCharCode(value & 0xFF);
+        if (count > 4) {
+          const ptr = value;
+          const chars = [];
+          for (let i = 0; i < Math.min(count - 1, 100); i++) {
+            const c = imgData[ptr + i];
+            if (c === 0) break;
+            chars.push(String.fromCharCode(c));
+          }
+          str = chars.join('');
+        }
+      } else if (type === 3) { // SHORT
+        str = count <= 4 ? (value & 0xFFFF) : 'Array(' + count + ')';
+      } else if (type === 4) { // LONG
+        str = count <= 4 ? value : 'Array(' + count + ')';
+      } else if (type === 5) { // RATIONAL
+        const num = value;
+        const den = num + 4 < imgData.byteLength ? readUInt32(imgData, num + 4, true) : 1;
+        str = den === 0 ? '∞' : (num / den).toFixed(4);
+      } else if (type === 7) { // UNDEFINED
+        str = '[Binary data]';
+      } else if (type === 9) { // SLONG
+        str = count <= 4 ? (value & 0xFFFFFFFF) : 'Array(' + count + ')';
+      } else if (type === 10) { // SRATIONAL
+        const num = value;
+        const den = num + 4 < imgData.byteLength ? readUInt32(imgData, num + 4, true) : 1;
+        str = den === 0 ? '∞' : (num / den).toFixed(4);
+      } else {
+        str = 'Type:' + type + ' Count:' + count;
+      }
+      
+      return { tag: tagNames, value: str };
+    }
+
+    let imgData = null;
+
+    async function load() {
+      try {
+        const result = await window.omniview.readFileBuffer(fp);
+        if (!result.success) throw new Error(result.error);
+        imgData = new DataView(result.buffer);
+        
+        const fileName = fp.split(/\\|\//).pop() || 'image';
+        document.getElementById('nm').textContent = fileName;
+        document.getElementById('st').textContent = (result.buffer.length / 1024).toFixed(1) + ' KB';
+
+        // Show thumbnail
+        const blob = new Blob([result.buffer], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        document.getElementById('thumb').src = url;
+
+        // Find EXIF
+        let exifData = null;
+        const SOI = [0xFF, 0xD8];
+        const SOS = [0xFF, 0xDA];
+        const EOI = [0xFF, 0xD9];
+        const APP1 = [0xFF, 0xE1];
+        
+        let pos = 0;
+        while (pos < imgData.byteLength - 1) {
+          if (imgData.getUint8(pos) === 0xFF) {
+            const marker = imgData.getUint8(pos + 1);
+            if (marker === 0xD8) { pos += 2; continue; } // SOI
+            if (marker === 0xD9) break; // EOI
+            if (marker === 0xDA) break; // SOS
+            if (marker === 0xE1) { // APP1 - EXIF
+              const length = imgData.getUint16(pos + 2, false);
+              const identifier = String.fromCharCode(
+                imgData.getUint8(pos + 4), imgData.getUint8(pos + 5),
+                imgData.getUint8(pos + 6), imgData.getUint8(pos + 7),
+                imgData.getUint8(pos + 8), imgData.getUint8(pos + 9)
+              );
+              if (identifier === 'Exif') {
+                const ifdOffset = pos + 10 + readUInt32(imgData, pos + 10, false);
+                exifData = parseExifData(imgData, ifdOffset, imgData);
+                break;
+              }
+              pos += 2 + length;
+              continue;
+            }
+            if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xDA) {
+              // DHT, DQT, DNL, etc - skip
+              const len = imgData.getUint16(pos + 2, false);
+              pos += 2 + len;
+              continue;
+            }
+            if (marker === 0xDA) break;
+          }
+          pos++;
+        }
+
+        // Render EXIF
+        const container = document.getElementById('exif');
+        if (!exifData || exifData.length === 0) {
+          container.innerHTML = '<div class="err">未找到 EXIF 数据</div>';
+          return;
+        }
+
+        let html = '';
+        const baseTags = ['ImageWidth', 'ImageLength', 'BitsPerSample', 'Compression', 
+                          'PhotometricInterpretation', 'Orientation', 'XResolution', 'YResolution',
+                          'ResolutionUnit', 'Software', 'DateTime', 'Artist'];
+        const exifTags = ['ExposureTime', 'FNumber', 'ISOSpeedRatings', 'ExposureProgram',
+                          'SpectralSensitivity', 'ExifVersion', 'DateTimeOriginal', 'DateTimeDigitized',
+                          'ShutterSpeedValue', 'ApertureValue', 'BrightnessValue', 'ExposureBias',
+                          'MaxApertureValue', 'SubjectDistance', 'MeteringMode', 'LightSource',
+                          'Flash', 'FocalLength', 'ColorSpace', 'PixelXDimension', 'PixelYDimension',
+                          'ExposureMode', 'WhiteBalance', 'FocalLengthIn35mm', 'SceneCaptureType'];
+        const gpsTags = ['GPSInfo'];
+
+        // Base EXIF
+        html += '<div class="exif-section"><div class="exif-section-title">图像信息</div>';
+        exifData.forEach(entry => {
+          const info = getValueString(entry);
+          if (baseTags.includes(info.tag)) {
+            html += '<div class="exif-row"><span class="exif-key">' + escapeHtml(info.tag) + '</span><span class="exif-val">' + escapeHtml(info.value) + '</span></div>';
+          }
+        });
+        html += '</div>';
+
+        // Exposure Info
+        html += '<div class="exif-section"><div class="exif-section-title">曝光信息</div>';
+        exifData.forEach(entry => {
+          const info = getValueString(entry);
+          if (exifTags.includes(info.tag)) {
+            html += '<div class="exif-row"><span class="exif-key">' + escapeHtml(info.tag) + '</span><span class="exif-val">' + escapeHtml(info.value) + '</span></div>';
+          }
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

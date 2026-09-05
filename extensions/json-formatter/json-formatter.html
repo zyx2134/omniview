@@ -1,0 +1,88 @@
+﻿<!DOCTYPE html>
+<html><head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src self file:;">
+  <title>JSON</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 34px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 12px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 11px; color: #666; }
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; }
+    .toolbar button { background: #3e3e42; border: none; color: #ccc; padding: 3px 10px; border-radius: 3px; font-size: 11px; cursor: pointer; }
+    .toolbar button:hover { background: #505055; }
+    pre { flex: 1; overflow: auto; padding: 16px; font-size: 13px; line-height: 1.6; font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 13px; }
+    /* JSON syntax colors */
+    .k { color: #569cd6; }  /* key */
+    .s { color: #ce9178; }  /* string */
+    .n { color: #b5cea8; }  /* number */
+    .b { color: #569cd6; }  /* boolean/null */
+    .p { color: #888; }    /* punctuation */
+  </style>
+</head><body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st">Loading...</span></div>
+  <div class="toolbar">
+    <button id="fmt">Format</button>
+    <button id="compact">Compact</button>
+  </div>
+  <pre><code id="code"></code></pre>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'json';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - JSON';
+    
+    let rawData = '';
+    let parsed = null;
+    
+    function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    
+    function syntaxHighlight(json, indent) {
+      if (typeof json !== 'string') json = JSON.stringify(json, null, indent || 2);
+      json = json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(m) {
+        let cls = 'n';
+        if (/^"/.test(m)) {
+          if (/:$/.test(m)) cls = 'k';
+          else cls = 's';
+        } else if (/true|false/.test(m)) cls = 'b';
+        else if (/null/.test(m)) cls = 'b';
+        return '<span class="' + cls + '">' + m + '</span>';
+      });
+    }
+    
+    function render(data, indent) {
+      const code = document.getElementById('code');
+      if (indent) {
+        code.innerHTML = syntaxHighlight(JSON.stringify(data, null, indent));
+      } else {
+        code.innerHTML = syntaxHighlight(JSON.stringify(data));
+      }
+      const lines = code.innerText.split('\n').length;
+      document.getElementById('st').textContent = lines + ' lines · ' + rawData.length.toLocaleString() + ' chars';
+    }
+    
+    if (typeof window.omniview !== 'undefined' && window.omniview.readFile) {
+      window.omniview.readFile(fp).then(r => {
+        if (!r.success) { document.getElementById('err').style.display='flex'; document.getElementById('err').textContent='Failed: '+r.error; return; }
+        rawData = r.content;
+        try {
+          parsed = JSON.parse(rawData);
+          render(parsed, 2);
+        } catch(e) {
+          document.getElementById('err').style.display='flex';
+          document.getElementById('err').textContent='Invalid JSON: '+e.message;
+        }
+      }).catch(e => {
+        document.getElementById('err').style.display='flex';
+        document.getElementById('err').textContent='Error: '+e.message;
+      });
+    }
+    
+    document.getElementById('fmt').onclick = () => { if(parsed) render(parsed, 2); };
+    document.getElementById('compact').onclick = () => { if(parsed) render(parsed, 0); };
+  </script>
+</body></html>

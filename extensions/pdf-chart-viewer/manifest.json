@@ -1,0 +1,13 @@
+﻿{
+  "id": "pdf-chart-viewer",
+  "name": "PDF & Chart Viewer",
+  "version": "1.0.0",
+  "description": "Read and view PDF and SVG chart files",
+  "type": "format",
+  "formats": ["pdf", "svg"],
+  "author": "Omniview",
+  "ui": { "icon": "\uD83D\uDCC4", "label": "PDF/Chart", "panel": "pdf-chart.html" },
+  "apiVersion": "1",
+  "hasSettings": true,
+  "permissions": ["file:read"]
+}

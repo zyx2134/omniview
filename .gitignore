@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+release/
+out/
+
+# Electron builder cache
+.electron-builder/
+
+# Logs
+*.log
+output.log
+app_error.log
+error.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Windows
+*.lnk
+*.exe
+*.dll
+*.bat
+完整预览.html
+预览*.html
+electron.html
+
+# Test files
+test_*.*

@@ -1,0 +1,14 @@
+{
+  "id": "svg-viewer",
+  "name": "SVG Viewer",
+  "version": "1.0.0",
+  "description": "Render SVG files with zoom, pan, and code view",
+  "type": "format",
+  "formats": ["svg"],
+  "mimeTypes": ["image/svg+xml"],
+  "author": "Omniview",
+  "ui": { "icon": "🎨", "label": "SVG", "panel": "svg-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

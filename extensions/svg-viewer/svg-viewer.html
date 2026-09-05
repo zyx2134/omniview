@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>SVG</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    .toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; }
+    .toolbar button { background: #3e3e42; border: none; color: #ccc; padding: 2px 8px; border-radius: 2px; font-size: 10px; cursor: pointer; }
+    .toolbar button:hover { background: #505055; }
+    .toolbar button.active { background: #0078d4; color: #fff; }
+    .view-container { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; background: #1a1a1a; position: relative; }
+    .view-container svg { max-width: 100%; max-height: 100%; }
+    .code-view { flex: 1; overflow: auto; padding: 14px; font-family: "Consolas", monospace; font-size: 11px; line-height: 1.5; background: #1e1e1e; color: #d4d4d4; display: none; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+    .zoom-info { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #888; padding: 2px 8px; border-radius: 3px; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toolbar">
+    <button id="viewSvg" class="active">预览</button>
+    <button id="viewCode">代码</button>
+    <button id="zoomIn">+</button>
+    <button id="zoomOut">-</button>
+    <button id="resetZoom">重置</button>
+  </div>
+  <div class="view-container" id="container">
+    <div id="svgView"></div>
+    <pre class="code-view" id="codeView"></pre>
+    <div class="zoom-info" id="zoomInfo">100%</div>
+  </div>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'svg';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - SVG';
+
+    let svgContent = '';
+    let zoomLevel = 1;
+
+    function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function setZoom(level) {
+      zoomLevel = Math.max(0.1, Math.min(10, level));
+      document.getElementById('svgView').style.transform = 'scale(' + zoomLevel + ')';
+      document.getElementById('zoomInfo').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    async function load() {
+      try {
+        const result = await window.omniview.readFile(fp);
+        if (!result.success) throw new Error(result.error);
+        svgContent = result.content;
+        
+        // Extract dimensions
+        const sizeMatch = svgContent.match(/width=["'](\d+)(?:px|%)?["']/);
+        const heightMatch = svgContent.match(/height=["'](\d+)(?:px|%)?["']/);
+        const dims = [];
+        if (sizeMatch) dims.push(sizeMatch[1] + 'px');
+        if (heightMatch) dims.push(heightMatch[1] + 'px');
+        
+        document.getElementById('st').textContent = dims.length ? dims.join(' × ') + ', ' + svgContent.length + ' chars' : svgContent.length + ' chars';
+        document.getElementById('svgView').innerHTML = svgContent;
+        document.getElementById('codeView').textContent = svgContent;
+        
+        // Style SVG
+        const svg = document.querySelector('#svgView svg');
+        if (svg) {
+          svg.style.maxWidth = '100%';
+          svg.style.maxHeight = '100%';
+          svg.style.transformOrigin = 'center';
+          svg.style.transition = 'transform 150ms ease-out';
+        }
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    document.getElementById('viewSvg').onclick = () => {
+      document.getElementById('svgView').style.display = 'block';
+      document.getElementById('codeView').style.display = 'none';
+      document.getElementById('viewSvg').classList.add('active');
+      document.getElementById('viewCode').classList.remove('active');
+    };
+    document.getElementById('viewCode').onclick = () => {
+      document.getElementById('svgView').style.display = 'none';
+      document.getElementById('codeView').style.display = 'block';
+      document.getElementById('viewCode').classList.add('active');
+      document.getElementById('viewSvg').classList.remove('active');
+    };
+    document.getElementById('zoomIn').onclick = () => setZoom(zoomLevel * 1.2);
+    document.getElementById('zoomOut').onclick = () => setZoom(zoomLevel / 1.2);
+    document.getElementById('resetZoom').onclick = () => setZoom(1);
+
+    load();
+  </script>
+</body>
+</html>

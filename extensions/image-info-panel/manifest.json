@@ -1,0 +1,11 @@
+{
+  "id": "image-info-panel",
+  "name": "Image Info Panel",
+  "version": "1.0.0",
+  "description": "Shows detailed image metadata including dimensions, colors, and format info",
+  "type": "feature",
+  "author": "Omniview",
+  "ui": { "icon": "\uD83D\uDDB2", "label": "Info", "panel": "image-info.html" },
+  "config": { "showExif": { "type": "boolean", "label": "Show EXIF data", "default": false } },
+  "permissions": ["file:read"]
+}

@@ -1,0 +1,11 @@
+﻿{
+  "id": "media-duration-info",
+  "name": "Media Duration Info",
+  "version": "1.0.0",
+  "description": "Shows duration, resolution, and codec info for media files",
+  "type": "format",
+  "formats": ["mp4", "mkv", "avi", "mov", "mp3", "wav", "flac", "webm", "m4a"],
+  "author": "Omniview",
+  "ui": { "icon": "🎵", "label": "Media Info", "panel": "media-info.html" },
+  "permissions": ["file:read"]
+}

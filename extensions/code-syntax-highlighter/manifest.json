@@ -1,0 +1,12 @@
+{
+  "id": "code-syntax-highlighter",
+  "name": "Code Syntax Highlighter",
+  "version": "1.0.0",
+  "description": "Enhanced code viewer with syntax highlighting for multiple languages",
+  "type": "format",
+  "formats": ["js", "ts", "jsx", "tsx", "py", "json", "html", "css", "md", "xml", "yaml", "yml", "sh", "bat", "cfg", "ini", "log"],
+  "author": "Omniview",
+  "ui": { "icon": "\uD83D\uDCD6", "label": "Code", "panel": "code-viewer.html" },
+  "config": { "tabSize": { "type": "number", "label": "Tab size", "default": 4, "min": 2, "max": 8 } },
+  "permissions": ["file:read"]
+}

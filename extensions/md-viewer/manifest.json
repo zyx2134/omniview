@@ -1,0 +1,13 @@
+﻿{
+  "id": "md-viewer",
+  "name": "Markdown Viewer",
+  "version": "1.0.0",
+  "description": "Renders Markdown files with tables, code highlighting and formula preview",
+  "type": "format",
+  "formats": ["md", "markdown"],
+  "author": "Omniview",
+  "ui": { "icon": "\u{1F4DD}", "label": "Markdown", "panel": "md-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": true,
+  "permissions": ["file:read"]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "log-viewer",
+  "name": "Log Viewer",
+  "version": "1.0.0",
+  "description": "Syntax-highlighted log file viewer with level filtering",
+  "type": "format",
+  "formats": ["log", "txt"],
+  "mimeTypes": ["text/plain"],
+  "author": "Omniview",
+  "ui": { "icon": "📃", "label": "Log", "panel": "log-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

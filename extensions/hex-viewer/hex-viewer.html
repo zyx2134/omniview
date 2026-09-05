@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>Hex</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d0d; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Consolas", "Fira Code", monospace; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #1e1e1e; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #1e1e1e; border-bottom: 1px solid #333; }
+    .toolbar label { font-size: 10px; color: #888; }
+    .toolbar select { background: #2d2d2d; border: 1px solid #444; color: #ccc; padding: 1px 4px; font-size: 10px; border-radius: 2px; }
+    pre { flex: 1; overflow: auto; padding: 12px; font-size: 11px; line-height: 1.6; color: #d4d4d4; }
+    .addr { color: #6a9955; margin-right: 12px; }
+    .byte { margin: 0 2px; }
+    .byte.printable { color: #ce9178; }
+    .byte.non-printable { color: #569cd6; }
+    .ascii { margin-left: 12px; color: #888; border-left: 1px solid #333; padding-left: 12px; }
+    .ascii .printable { color: #4ec9b0; }
+    .ascii .non-printable { color: #569cd6; opacity: 0.5; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toolbar">
+    <label>每行字节:</label>
+    <select id="bytesPerRow">
+      <option value="8">8</option>
+      <option value="16" selected>16</option>
+      <option value="32">32</option>
+      <option value="64">64</option>
+    </select>
+    <label style="margin-left:12px;">搜索:</label>
+    <input type="text" id="search" style="width:120px;padding:1px 4px;font-size:10px;background:#2d2d2d;border:1px solid #444;color:#ccc;border-radius:2px;" placeholder="HEX 或 ASCII">
+  </div>
+  <pre id="dump"></pre>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'hex';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - Hex';
+
+    let rawData = null;
+    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+
+    function isPrintable(b) { return b >= 32 && b <= 126; }
+
+    function toHex(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+
+    function renderDump(data, bytesPerRow) {
+      const lines = [];
+      const totalLines = Math.ceil(data.length / bytesPerRow);
+      const maxLines = 5000; // Limit for performance
+      const displayLines = Math.min(totalLines, maxLines);
+      
+      for (let i = 0; i < displayLines; i++) {
+        const offset = i * bytesPerRow;
+        const lineBytes = data.slice(offset, offset + bytesPerRow);
+        
+        // Address
+        let line = '<span class="addr">' + toHex(offset).padStart(8, '0') + '</span>';
+        
+        // Hex bytes
+        for (let j = 0; j < bytesPerRow; j++) {
+          if (j < lineBytes.length) {
+            const b = lineBytes[j];
+            const cls = isPrintable(b) ? 'printable' : 'non-printable';
+            line += '<span class="byte ' + cls + '">' + toHex(b) + '</span>';
+          } else {
+            line += '<span class="byte">   </span>';
+          }
+          if (j === 7) line += ' ';
+        }
+        
+        // ASCII
+        line += '<span class="ascii">';
+        for (let j = 0; j < lineBytes.length; j++) {
+          const b = lineBytes[j];
+          const cls = isPrintable(b) ? 'printable' : 'non-printable';
+          line += '<span class="' + cls + '">' + (isPrintable(b) ? String.fromCharCode(b) : '·') + '</span>';
+        }
+        line += '</span>';
+        
+        lines.push(line);
+      }
+      
+      if (totalLines > maxLines) {
+        lines.push('<div style="color:#666;padding:8px;">... 仅显示前 ' + maxLines + ' 行，共 ' + totalLines + ' 行 ...</div>');
+      }
+      
+      return lines.join('\n');
+    }
+
+    async function load() {
+      try {
+        const result = await window.omniview.readFileBuffer(fp);
+        if (!result.success) throw new Error(result.error);
+        rawData = new Uint8Array(result.buffer);
+        
+        const bytesPerRow = parseInt(document.getElementById('bytesPerRow').value);
+        document.getElementById('dump').innerHTML = renderDump(rawData, bytesPerRow);
+        document.getElementById('st').textContent = rawData.length.toLocaleString() + ' bytes';
+        
+        // Auto-detect magic bytes
+        const magic = rawData.slice(0, 4);
+        const magicStr = Array.from(magic).map(b => toHex(b)).join(' ');
+        document.getElementById('st').textContent += ' | ' + magicStr;
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    document.getElementById('bytesPerRow').onchange = () => {
+      if (rawData) {
+        const bpr = parseInt(document.getElementById('bytesPerRow').value);
+        document.getElementById('dump').innerHTML = renderDump(rawData, bpr);
+      }
+    };
+
+    document.getElementById('search').oninput = (e) => {
+      if (!rawData) return;
+      const query = e.target.value.trim().toUpperCase();
+      if (!query) {
+        const bpr = parseInt(document.getElementById('bytesPerRow').value);
+        document.getElementById('dump').innerHTML = renderDump(rawData, bpr);
+        return;
+      }
+      
+      // Search for byte sequence
+      let searchBytes;
+      if (/^[0-9A-F\s]+$/.test(query)) {
+        searchBytes = query.split(/\s+/).map(h => parseInt(h, 16));
+      } else {
+        searchBytes = Array.from(query).map(c => c.charCodeAt(0));
+      }
+      
+      const matches = [];
+      for (let i = 0; i <= rawData.length - searchBytes.length; i++) {
+        let found = true;
+        for (let j = 0; j < searchBytes.length; j++) {
+          if (rawData[i + j] !== searchBytes[j]) { found = false; break; }
+        }
+        if (found) matches.push(i);
+      }
+      
+      document.getElementById('st').textContent = matches.length + ' matches found';
+      
+      // Highlight first match
+      if (matches.length > 0) {
+        const bpr = parseInt(document.getElementById('bytesPerRow').value);
+        const matchOffset = matches[0];
+        const startLine = Math.floor(matchOffset / bpr);
+        document.getElementById('dump').innerHTML = renderDump(rawData, bpr);
+        // Scroll to match
+        const dump = document.getElementById('dump');
+        dump.scrollTop = (startLine * 20) - 100;
+      }
+    };
+
+    load();
+  </script>
+</body>
+</html>

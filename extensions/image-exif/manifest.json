@@ -1,0 +1,14 @@
+{
+  "id": "image-exif",
+  "name": "Image EXIF Viewer",
+  "version": "1.0.0",
+  "description": "Extract and display EXIF metadata from JPEG/HEIC images",
+  "type": "format",
+  "formats": ["jpg", "jpeg", "heic", "heif"],
+  "mimeTypes": ["image/jpeg", "image/heic"],
+  "author": "Omniview",
+  "ui": { "icon": "📷", "label": "EXIF", "panel": "image-exif.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

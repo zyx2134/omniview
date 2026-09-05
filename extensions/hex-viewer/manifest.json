@@ -1,0 +1,14 @@
+{
+  "id": "hex-viewer",
+  "name": "Hex Viewer",
+  "version": "1.0.0",
+  "description": "View raw binary data as hex dump with ASCII representation",
+  "type": "format",
+  "formats": ["bin", "exe", "dll", "so", "dylib", "elf", "mach-o", "zip", "gz", "tar", "7z", "rar"],
+  "mimeTypes": ["application/octet-stream"],
+  "author": "Omniview",
+  "ui": { "icon": "⚙️", "label": "Hex", "panel": "hex-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

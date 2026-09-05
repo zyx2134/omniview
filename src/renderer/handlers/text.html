@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>文本编辑器</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; }
+    .bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; background: #323233;
+      border-bottom: 1px solid #3e3e42; height: 36px; flex-shrink: 0;
+    }
+    .bar .name { flex: 1; font-size: 12px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "Segoe UI", sans-serif; }
+    .bar .stats { font-size: 11px; color: #888; margin-left: 8px; }
+    .toolbar {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 12px; background: #2d2d2d;
+      border-bottom: 1px solid #3e3e42; height: 32px; flex-shrink: 0;
+    }
+    .toolbar button {
+      background: #3e3e42; border: 1px solid #555; color: #ccc;
+      padding: 2px 10px; border-radius: 3px; font-size: 11px; cursor: pointer;
+      font-family: "Segoe UI", sans-serif;
+    }
+    .toolbar button:hover { background: #505055; color: #fff; }
+    .toolbar button.active { background: #0e639c; border-color: #1177bb; color: #fff; }
+    .toolbar .sep { width: 1px; height: 16px; background: #555; margin: 0 4px; }
+    .search-bar {
+      display: none; align-items: center; gap: 4px;
+      padding: 4px 12px; background: #252526;
+      border-bottom: 1px solid #3e3e42; height: 30px; flex-shrink: 0;
+    }
+    .search-bar.show { display: flex; }
+    .search-bar input {
+      background: #3c3c3c; border: 1px solid #555; color: #ccc;
+      padding: 2px 8px; border-radius: 3px; font-size: 12px; width: 200px;
+      font-family: "Segoe UI", sans-serif;
+    }
+    .search-bar input:focus { outline: none; border-color: #0e639c; }
+    .search-bar .count { font-size: 11px; color: #888; }
+    .editor-wrap {
+      flex: 1; display: flex; overflow: hidden; position: relative;
+    }
+    .line-numbers {
+      width: 48px; background: #1e1e1e; color: #858585;
+      padding: 14px 8px 14px 0; text-align: right;
+      font-size: 13px; line-height: 1.7; overflow: hidden;
+      border-right: 1px solid #333; flex-shrink: 0;
+      user-select: none;
+    }
+    textarea {
+      flex: 1; background: #1e1e1e; color: #d4d4d4;
+      border: none; outline: none; resize: none;
+      padding: 14px 18px; font-size: 13px; line-height: 1.7;
+      tab-size: 4; overflow: auto; white-space: pre;
+    }
+    textarea::selection { background: #264f78; }
+    textarea.readonly-mode { opacity: 0.7; cursor: default; }
+    .statusbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 2px 12px; background: #007acc;
+      height: 22px; flex-shrink: 0; font-size: 11px; color: #fff;
+    }
+    .statusbar .status-right { margin-left: auto; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-family: "Segoe UI", sans-serif; font-size: 13px; flex-direction: column; gap: 8px; }
+    .ld  { display: flex; align-items: center; justify-content: center; height: 100%; color: #555; font-family: "Segoe UI", sans-serif; }
+    .save-toast {
+      position: fixed; bottom: 30px; right: 20px;
+      background: #0e7a0d; color: #fff; padding: 6px 14px;
+      border-radius: 4px; font-size: 12px; font-family: "Segoe UI", sans-serif;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .save-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="name" id="nm"></span>
+    <span class="stats" id="st">Loading...</span>
+  </div>
+  <div class="toolbar">
+    <button id="btn-save" title="保存 (Ctrl+S)">保存</button>
+    <div class="sep"></div>
+    <button id="btn-search" title="查找 (Ctrl+F)">查找</button>
+    <button id="btn-replace" title="替换 (Ctrl+H)">替换</button>
+    <button id="btn-toggle" title="切换编辑/只读">编辑</button>
+    <div class="sep"></div>
+    <button id="btn-indent" title="增加缩进">增大缩进</button>
+    <button id="btn-outdent" title="减少缩进">减小缩进</button>
+  </div>
+  <div class="search-bar" id="searchBar">
+    <input type="text" id="searchInput" placeholder="查找...">
+    <button id="btn-next">下一个</button>
+    <span class="count" id="matchCount"></span>
+    <div class="sep"></div>
+    <input type="text" id="replaceInput" placeholder="替换为...">
+    <button id="btn-replaceOne">替换</button>
+    <button id="btn-replaceAll">全部替换</button>
+    <button id="btn-closeSearch">X</button>
+  </div>
+  <div class="editor-wrap">
+    <div class="line-numbers" id="lineNums"></div>
+    <textarea id="ed" spellcheck="false" class="readonly-mode"></textarea>
+  </div>
+  <div class="statusbar">
+    <span id="cursorPos">Ln 1, Col 1</span>
+    <span id="selInfo"></span>
+    <span class="status-right" id="enc"></span>
+  </div>
+  <div class="err" id="err" style="display:none;"></div>
+  <div class="ld" id="ld">Loading...</div>
+  <div class="save-toast" id="toast">已保存</div>
+
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'unknown';
+    document.getElementById('nm').textContent = name + ' — 编辑器';
+    document.title = name + ' — Omniview';
+
+    const ed = document.getElementById('ed');
+    const lineNums = document.getElementById('lineNums');
+    const fileUrl = 'file:///' + fp.replace(/^\/+/, '').replace(/\\/g, '/');
+    let isEditable = false;
+    let searchTerm = '';
+    let searchResults = [];
+    let currentMatchIdx = -1;
+
+    // Load file
+    fetch(fileUrl)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(txt => {
+        document.getElementById('ld').style.display = 'none';
+        ed.value = txt;
+        updateStats();
+        updateLineNumbers();
+      })
+      .catch(e => {
+        document.getElementById('ld').style.display = 'none';
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = '读取失败: ' + e.message + '\n文件可能是二进制格式。';
+      });
+
+    function updateStats() {
+      const txt = ed.value;
+      const lines = txt.split('\n').length;
+      document.getElementById('st').textContent = lines.toLocaleString() + ' 行 · ' + txt.length.toLocaleString() + ' 字符';
+      const enc = detectEncoding(txt);
+      document.getElementById('enc').textContent = enc;
+    }
+
+    function detectEncoding(txt) {
+      if (/[\u4e00-\u9fff]/.test(txt)) return 'UTF-8 (含中文)';
+      if (/[\x80-\xff]/.test(txt)) return 'UTF-8';
+      return 'ASCII';
+    }
+
+    function updateLineNumbers() {
+      const lines = ed.value.split('\n');
+      const count = lines.length;
+      let html = '';
+      for (let i = 1; i <= Math.min(count, 9999); i++) {
+        html += i + '\n';
+      }
+      if (count > 9999) html += '...';
+      lineNums.textContent = html;
+    }
+
+    function updateCursorPos() {
+      const val = ed.value.substring(0, ed.selectionStart);
+      const lines = val.split('\n');
+      const ln = lines.length;
+      const col = lines[lines.length - 1].length + 1;
+      document.getElementById('cursorPos').textContent = '第 ' + ln + ' 行, 第 ' + col + ' 列';
+      const selLen = ed.selectionEnd - ed.selectionStart;
+      document.getElementById('selInfo').textContent = selLen > 0 ? selLen + ' 字符已选中' : '';
+    }
+
+    // Sync scroll for line numbers
+    ed.addEventListener('scroll', () => {
+      lineNums.scrollTop = ed.scrollTop;
+    });
+    ed.addEventListener('click', updateCursorPos);
+    ed.addEventListener('keyup', updateCursorPos);
+    ed.addEventListener('select', updateCursorPos);
+
+    // Tab key support
+    ed.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = ed.selectionStart;
+        const end = ed.selectionEnd;
+        if (e.shiftKey) {
+          // Outdent
+          const lineStart = ed.value.lastIndexOf('\n', start - 1) + 1;
+          const lineText = ed.value.substring(lineStart, end);
+          if (lineText.startsWith('    ')) {
+            ed.value = ed.value.substring(0, lineStart) + lineText.substring(4) + ed.value.substring(end);
+            ed.selectionStart = Math.max(start - 4, lineStart);
+            ed.selectionEnd = Math.max(end - 4, lineStart);
+          }
+        } else {
+          ed.value = ed.value.substring(0, start) + '    ' + ed.value.substring(end);
+          ed.selectionStart = ed.selectionEnd = start + 4;
+        }
+        updateLineNumbers();
+        updateStats();
+      }
+      // Ctrl+S save
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        saveFile();
+      }
+      // Ctrl+F search
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        toggleSearch(true);
+      }
+      // Ctrl+H replace
+      if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        toggleSearch(true);
+        document.getElementById('replaceInput').focus();
+      }
+    });
+
+    ed.addEventListener('input', () => {
+      updateLineNumbers();
+      updateStats();
+    });
+
+    // Toggle edit mode
+    document.getElementById('btn-toggle').addEventListener('click', () => {
+      isEditable = !isEditable;
+      ed.readOnly = !isEditable;
+      ed.classList.toggle('readonly-mode', !isEditable);
+      document.getElementById('btn-toggle').textContent = isEditable ? '只读' : '编辑';
+      document.getElementById('btn-toggle').classList.toggle('active', isEditable);
+      if (isEditable) ed.focus();
+    });
+
+    // Save
+    async function saveFile() {
+      if (!isEditable) { alert('请先点击"编辑"按钮进入编辑模式'); return; }
+      try {
+        const parentApi = window.parent.omniview;
+        const result = await parentApi.writeFile(fp, ed.value);
+        if (result && result.success) {
+          showToast('已保存 (' + ed.value.length + ' 字符)');
+        } else {
+          alert('保存失败: ' + (result?.error || '未知错误'));
+        }
+      } catch(e) {
+        // Fallback: try writing via parent postMessage or direct approach
+        try {
+          const parentApi = window.parent.omniview;
+          if (parentApi.saveFile) {
+            const result = await parentApi.saveFile(fp, ed.value);
+            if (result && result.success) showToast('已保存');
+            else alert('保存失败');
+          } else {
+            alert('保存功能需要扩展支持，请联系开发者。');
+          }
+        } catch(e2) {
+          alert('保存失败: ' + e2.message);
+        }
+      }
+    }
+    document.getElementById('btn-save').addEventListener('click', saveFile);
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    // Search & Replace
+    function toggleSearch(showReplace) {
+      const bar = document.getElementById('searchBar');
+      bar.classList.toggle('show', true);
+      document.getElementById('searchInput').focus();
+    }
+
+    document.getElementById('btn-search').addEventListener('click', () => toggleSearch(false));
+    document.getElementById('btn-replace').addEventListener('click', () => toggleSearch(true));
+    document.getElementById('btn-closeSearch').addEventListener('click', () => {
+      document.getElementById('searchBar').classList.remove('show');
+    });
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+      searchTerm = document.getElementById('searchInput').value;
+      currentMatchIdx = -1;
+      if (!searchTerm) {
+        document.getElementById('matchCount').textContent = '';
+        ed.value = ed.value; // clear highlights
+        return;
+      }
+      // Simple search
+      const idx = ed.value.indexOf(searchTerm);
+      if (idx >= 0) {
+        ed.setSelectionRange(idx, idx + searchTerm.length);
+        ed.focus();
+        document.getElementById('matchCount').textContent = '找到匹配';
+      } else {
+        document.getElementById('matchCount').textContent = '未找到';
+      }
+    });
+
+    document.getElementById('btn-next').addEventListener('click', () => {
+      if (!searchTerm) return;
+      const start = ed.selectionEnd;
+      const idx = ed.value.indexOf(searchTerm, start);
+      if (idx >= 0) {
+        ed.setSelectionRange(idx, idx + searchTerm.length);
+        ed.focus();
+      } else {
+        // Wrap around
+        const wrapIdx = ed.value.indexOf(searchTerm, 0);
+        if (wrapIdx >= 0) {
+          ed.setSelectionRange(wrapIdx, wrapIdx + searchTerm.length);
+          ed.focus();
+        }
+      }
+    });
+
+    document.getElementById('btn-replaceOne').addEventListener('click', () => {
+      if (!searchTerm || !isEditable) return;
+      const sel = ed.value.substring(ed.selectionStart, ed.selectionEnd);
+      if (sel === searchTerm) {
+        const replacement = document.getElementById('replaceInput').value;
+        ed.value = ed.value.substring(0, ed.selectionStart) + replacement + ed.value.substring(ed.selectionEnd);
+        updateLineNumbers();
+        updateStats();
+      }
+      document.getElementById('btn-next').click();
+    });
+
+    document.getElementById('btn-replaceAll').addEventListener('click', () => {
+      if (!searchTerm || !isEditable) return;
+      const replacement = document.getElementById('replaceInput').value;
+      const before = ed.value;
+      ed.value = ed.value.split(searchTerm).join(replacement);
+      if (ed.value !== before) {
+        updateLineNumbers();
+        updateStats();
+        showToast('已替换所有匹配项');
+      }
+    });
+
+    // Indent/Outdent
+    document.getElementById('btn-indent').addEventListener('click', () => {
+      if (!isEditable) return;
+      const start = ed.selectionStart;
+      const end = ed.selectionEnd;
+      const lineStart = ed.value.lastIndexOf('\n', start - 1) + 1;
+      const lineEnd = ed.value.indexOf('\n', end);
+      const selectedLines = ed.value.substring(lineStart, lineEnd === -1 ? ed.value.length : lineEnd);
+      const indented = selectedLines.split('\n').map(l => '    ' + l).join('\n');
+      ed.value = ed.value.substring(0, lineStart) + indented + ed.value.substring(lineEnd === -1 ? ed.value.length : lineEnd);
+      ed.selectionStart = start + 4;
+      ed.selectionEnd = end + 4;
+      ed.focus();
+      updateLineNumbers();
+    });
+
+    document.getElementById('btn-outdent').addEventListener('click', () => {
+      if (!isEditable) return;
+      const start = ed.selectionStart;
+      const end = ed.selectionEnd;
+      const lineStart = ed.value.lastIndexOf('\n', start - 1) + 1;
+      const lineEnd = ed.value.indexOf('\n', end);
+      const selectedLines = ed.value.substring(lineStart, lineEnd === -1 ? ed.value.length : lineEnd);
+      const outdented = selectedLines.split('\n').map(l => l.replace(/^    /, '')).join('\n');
+      const delta = selectedLines.length - outdented.length;
+      ed.value = ed.value.substring(0, lineStart) + outdented + ed.value.substring(lineEnd === -1 ? ed.value.length : lineEnd);
+      ed.selectionStart = Math.max(start - delta, lineStart);
+      ed.selectionEnd = Math.max(end - delta, lineStart);
+      ed.focus();
+      updateLineNumbers();
+    });
+  </script>
+</body>
+</html>

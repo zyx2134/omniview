@@ -1,0 +1,13 @@
+﻿{
+  "id": "heic-image-handler",
+  "name": "HEIC Image Handler",
+  "version": "1.0.0",
+  "description": "Support HEIC/HEIF image format viewing",
+  "type": "format",
+  "formats": ["heic", "heif"],
+  "author": "Omniview",
+  "ui": { "icon": "🖼", "title": "HEIC Image" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

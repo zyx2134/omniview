@@ -1,0 +1,13 @@
+﻿{
+  "id": "3d-model-viewer",
+  "name": "3D Model Viewer",
+  "version": "1.0.0",
+  "description": "View GLB/GLTF/OBJ/FBX 3D models with rotation, zoom, and material preview",
+  "type": "feature",
+  "formats": ["glb", "gltf", "obj", "fbx"],
+  "author": "Omniview",
+  "ui": { "panel": "3d-viewer.html", "icon": "◈", "title": "3D Model Viewer" },
+  "apiVersion": "1",
+  "hasSettings": true,
+  "permissions": ["file:read"]
+}

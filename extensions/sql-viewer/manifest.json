@@ -1,0 +1,13 @@
+﻿{
+  "id": "sql-viewer",
+  "name": "SQL Viewer",
+  "version": "1.0.0",
+  "description": "Syntax-highlighted SQL query viewer with formatting",
+  "type": "format",
+  "formats": ["sql"],
+  "author": "Omniview",
+  "ui": { "icon": "\u{1F5C3}\u{FE0F}", "label": "SQL", "panel": "sql-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

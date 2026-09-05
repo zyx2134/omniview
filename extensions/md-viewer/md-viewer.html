@@ -1,0 +1,55 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>Markdown</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    .content { flex: 1; overflow: auto; padding: 20px; }
+    .content h1 { font-size: 20px; margin-bottom: 12px; color: #f0f0f0; }
+    .content h2 { font-size: 16px; margin: 14px 0 8px; color: #e0e0e0; }
+    .content p { margin-bottom: 10px; line-height: 1.7; color: #d4d4d4; }
+    .content code { background: #2d2d2d; padding: 2px 6px; border-radius: 3px; font-family: "Consolas", monospace; font-size: 11px; color: #ce9178; }
+    .content pre { background: #2d2d2d; padding: 12px; border-radius: 4px; overflow-x: auto; margin: 10px 0; }
+    .content pre code { background: none; padding: 0; color: #d4d4d4; }
+    .content blockquote { border-left: 3px solid #00a8e8; padding-left: 12px; color: #888; margin: 10px 0; }
+    .content table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    .content th { background: #2d2d2d; padding: 6px 12px; text-align: left; font-size: 11px; color: #ccc; }
+    .content td { padding: 6px 12px; border-bottom: 1px solid #2a2a2a; font-size: 11px; color: #d4d4d4; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="content" id="content"></div>
+  <div class="err" id="err" style="display:none;"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    (function() {
+      const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+      const name = fp.split(/\\|\//).pop() || 'markdown';
+      document.getElementById('nm').textContent = name;
+      document.title = name + ' - Markdown';
+
+      async function load() {
+        try {
+          const result = await window.parent.omniview.readFile(fp);
+          if (!result.success) throw new Error(result.error);
+          const raw = result.content;
+          document.getElementById('content').innerHTML = marked.parse(raw);
+          document.getElementById('st').textContent = raw.length + ' chars, ' + raw.split('\n').length + ' lines';
+        } catch (e) {
+          document.getElementById('err').style.display = 'flex';
+          document.getElementById('err').textContent = 'Error: ' + e.message;
+        }
+      }
+      load();
+    })();
+  </script>
+</body>
+</html>

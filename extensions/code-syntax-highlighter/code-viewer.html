@@ -1,0 +1,72 @@
+﻿<!DOCTYPE html>
+<html><head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src self file:;">
+  <title>Code</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 34px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 12px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .lang { font-size: 10px; padding: 2px 8px; background: #0078d4; border-radius: 3px; color: #fff; }
+    .bar .stats { font-size: 11px; color: #666; }
+    pre { flex: 1; overflow: auto; padding: 16px; font-size: 13px; line-height: 1.6; font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; }
+    code { color: #d4d4d4; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 13px; }
+  </style>
+</head><body>
+  <div class="bar"><span class="name" id="nm"></span><span class="lang" id="lg"></span><span class="stats" id="st">Loading...</span></div>
+  <pre><code id="code"></code></pre>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'code';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - Code';
+    
+    function detectLang(ext) {
+      const map = { js:'JavaScript', ts:'TypeScript', jsx:'JSX', tsx:'TSX', py:'Python', json:'JSON', html:'HTML', css:'CSS', md:'Markdown', xml:'XML', yaml:'YAML', yml:'YAML', sh:'Shell', bat:'Batch', cfg:'Config', ini:'INI', log:'Log' };
+      return map[ext] || ext.toUpperCase();
+    }
+    
+    function highlight(line, lang) {
+      // Simple keyword highlighting
+      const keywords = /\b(const|let|var|function|return|if|else|for|while|class|import|export|from|default|async|await|new|try|catch|throw|switch|case|break|continue|typeof|instanceof|in|of|interface|type|enum|implements|extends|abstract|private|public|protected|static|readonly|as|package|def|print|self|True|False|None|with|yield|lambda|elif|raise|finally|global|nonlocal)\b/g;
+      const strings = /(["'`])(?:(?!\1|\\).|\\.)*?\1/g;
+      const comments = /(\/\/.*$|\/\*[\s\S]*?\*\/|#.*$)/gm;
+      const numbers = /\b(\d+\.?\d*)\b/g;
+      
+      let result = line
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      // Apply highlights in order (comments first to avoid double-highlighting)
+      result = result.replace(comments, '<span style="color:#6a9955">$1</span>');
+      result = result.replace(strings, '<span style="color:#ce9178">$1</span>');
+      result = result.replace(keywords, '<span style="color:#569cd6">$1</span>');
+      result = result.replace(numbers, '<span style="color:#b5cea8">$1</span>');
+      
+      return result;
+    }
+    
+    if (typeof window.omniview !== 'undefined' && window.omniview.readFile) {
+      window.omniview.readFile(fp).then(r => {
+        document.querySelector('#st').textContent = 'Loading...';
+        if (!r.success) { document.getElementById('err').style.display='flex'; document.getElementById('err').textContent='Failed: '+r.error; return; }
+        const lines = r.content.split('\n');
+        const ext = fp.split('.').pop()?.toLowerCase() || '';
+        const lang = detectLang(ext);
+        document.getElementById('lg').textContent = lang;
+        document.getElementById('st').textContent = lines.length + ' lines';
+        
+        const codeEl = document.getElementById('code');
+        codeEl.innerHTML = lines.map(l => highlight(l, lang)).join('\n') + '\n';
+      }).catch(e => {
+        document.getElementById('err').style.display='flex';
+        document.getElementById('err').textContent='Error: '+e.message;
+      });
+    } else {
+      document.getElementById('err').style.display='flex';
+      document.getElementById('err').textContent='IPC not available';
+    }
+  </script>
+</body></html>

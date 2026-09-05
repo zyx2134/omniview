@@ -1,0 +1,14 @@
+{
+  "id": "yaml-viewer",
+  "name": "YAML Viewer",
+  "version": "1.0.0",
+  "description": "Render and syntax-highlight YAML files with tree view",
+  "type": "format",
+  "formats": ["yaml", "yml"],
+  "mimeTypes": ["text/yaml", "application/x-yaml"],
+  "author": "Omniview",
+  "ui": { "icon": "📋", "label": "YAML", "panel": "yaml-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>ENV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    table { flex: 1; width: 100%; border-collapse: collapse; overflow: auto; display: block; }
+    th, td { padding: 6px 14px; text-align: left; border-bottom: 1px solid #2a2a2a; font-size: 11px; }
+    th { background: #252526; color: #888; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; }
+    td.key { color: #9cdcfe; font-family: "Consolas", monospace; }
+    td.val { color: #ce9178; font-family: "Consolas", monospace; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    td.valmasked { color: #666; font-family: "Consolas", monospace; }
+    tr:hover td { background: #2a2a2a; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+    .toggle-mask { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; font-size: 10px; color: #888; }
+    .toggle-mask input { accent-color: #00a8e8; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toggle-mask">
+    <input type="checkbox" id="mask"> <label for="mask">隐藏敏感值（密码/密钥）</label>
+  </div>
+  <table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody id="tbody"></tbody></table>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || '.env';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - ENV';
+
+    const SENSITIVE_KEYS = /^(PASSWORD|SECRET|KEY|TOKEN|CREDENTIAL|PRIVATE|AUTH|API_KEY|DB_PASS|MYSQL_ROOT|MONGO|REDIS)/i;
+    let allVars = [];
+
+    function parseEnv(text) {
+      const vars = [];
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx <= 0) continue;
+        const key = trimmed.substring(0, eqIdx).trim();
+        let val = trimmed.substring(eqIdx + 1).trim();
+        // Remove surrounding quotes
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        vars.push({ key, val });
+      }
+      return vars;
+    }
+
+    function render(masked) {
+      const tbody = document.getElementById('tbody');
+      let html = '';
+      allVars.forEach(v => {
+        const isSensitive = SENSITIVE_KEYS.test(v.key);
+        const displayVal = (masked && isSensitive) ? '••••••••' : v.val;
+        html += `<tr>
+          <td class="key">${v.key}</td>
+          <td class="${((masked && isSensitive) ? 'valmasked' : 'val')}">${displayVal}</td>
+        </tr>`;
+      });
+      tbody.innerHTML = html;
+      document.getElementById('st').textContent = allVars.length + ' variables';
+    }
+
+    document.getElementById('mask').onchange = (e) => render(e.target.checked);
+
+    async function load() {
+      try {
+        const result = await window.parent.omniview.readFile(fp);
+        if (!result.success) throw new Error(result.error);
+        allVars = parseEnv(result.content);
+        render(false);
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' file:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>视频</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; height: 100vh; overflow: hidden; display: flex; flex-direction: column; font-family: "Segoe UI", sans-serif; }
+    video { flex: 1; display: block; background: #000; object-fit: contain; }
+    .bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px;
+      background: #1c1c1c;
+      border-top: 1px solid #2e2e2e;
+    }
+    .bar button { background: none; border: none; color: #bbb; font-size: 16px; cursor: pointer; padding: 2px 4px; transition: color 100ms; }
+    .bar button:hover { color: #fff; }
+    .prog {
+      flex: 1; height: 4px; background: #3e3e42; border-radius: 2px; cursor: pointer; position: relative;
+    }
+    .prog-fill { height: 100%; background: #0078d4; border-radius: 2px; width: 0; transition: width 50ms; }
+    .time { font-size: 11px; color: #888; min-width: 90px; text-align: center; }
+    .vol { display: flex; align-items: center; gap: 6px; }
+    .vol input { width: 70px; accent-color: #0078d4; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body>
+  <video id="v" style="display:none;"></video>
+  <div class="err" id="err" style="display:none;">
+    <div>Cannot play video</div>
+    <div style="font-size:11px;color:#666">Format may not be supported</div>
+  </div>
+  <div class="bar">
+    <button id="play">&#9654;</button>
+    <div class="prog" id="prog"><div class="prog-fill" id="pf"></div></div>
+    <span class="time" id="t">0:00 / 0:00</span>
+    <div class="vol">
+      <span style="font-size:12px;color:#888">&#128266;</span>
+      <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8">
+    </div>
+  </div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const v = document.getElementById('v');
+    const err = document.getElementById('err');
+    document.title = (fp.split(/\\|\//).pop() || 'Video') + ' - Omniview';
+
+    v.src = 'file:///' + fp.replace(/^\/+/, '').replace(/\\/g, '/');
+
+    v.oncanplay = () => { v.style.display = 'block'; setup(); v.play(); };
+    v.onerror = () => { v.style.display = 'none'; err.style.display = 'flex'; };
+    v.ontimeupdate = () => {
+      const p = (v.currentTime / (v.duration || 1)) * 100;
+      document.getElementById('pf').style.width = p + '%';
+      document.getElementById('t').textContent = fmt(v.currentTime) + ' / ' + fmt(v.duration);
+    };
+    v.onended = () => { document.getElementById('play').textContent = String.fromCharCode(9654); };
+
+    function setup() {
+      document.getElementById('play').onclick = () => {
+        if (v.paused) { v.play(); document.getElementById('play').textContent = String.fromCharCode(9208); }
+        else { v.pause(); document.getElementById('play').textContent = String.fromCharCode(9654); }
+      };
+      document.getElementById('prog').onclick = e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        v.currentTime = ((e.clientX - r.left) / r.width) * v.duration;
+      };
+      document.getElementById('vol').oninput = e => { v.volume = parseFloat(e.target.value); };
+    }
+    function fmt(s) {
+      if (!s || !isFinite(s)) return '0:00';
+      return Math.floor(s / 60) + ':' + Math.floor(s % 60).toString().padStart(2, '0');
+    }
+  </script>
+</body>
+</html>

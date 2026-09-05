@@ -1,0 +1,14 @@
+{
+  "id": "env-viewer",
+  "name": "Env File Viewer",
+  "version": "1.0.0",
+  "description": "Parse and display .env / .env.local files with key-value view",
+  "type": "format",
+  "formats": ["env"],
+  "mimeTypes": ["text/plain"],
+  "author": "Omniview",
+  "ui": { "icon": "⚙️", "label": "ENV", "panel": "env-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

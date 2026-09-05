@@ -1,0 +1,14 @@
+{
+  "id": "csv-viewer",
+  "name": "CSV Viewer",
+  "version": "1.0.0",
+  "description": "Display CSV/TSV files as sortable tables with syntax highlighting",
+  "type": "format",
+  "formats": ["csv", "tsv"],
+  "mimeTypes": ["text/csv", "text/tab-separated-values"],
+  "author": "Omniview",
+  "ui": { "icon": "📊", "label": "CSV", "panel": "csv-viewer.html" },
+  "apiVersion": "1",
+  "hasSettings": false,
+  "permissions": ["file:read"]
+}

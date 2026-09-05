@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' file: https:;">
+  <title>PDF / Chart Viewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+    .bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; background: #323233;
+      border-bottom: 1px solid #3e3e42; height: 36px; flex-shrink: 0;
+    }
+    .bar .name { flex: 1; font-size: 12px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 11px; color: #888; }
+    .toolbar {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 12px; background: #252526;
+      border-bottom: 1px solid #3e3e42; height: 32px; flex-shrink: 0;
+    }
+    .toolbar button {
+      background: #3e3e42; border: 1px solid #555; color: #ccc;
+      padding: 2px 10px; border-radius: 3px; font-size: 11px; cursor: pointer;
+    }
+    .toolbar button:hover { background: #505055; color: #fff; }
+    .toolbar button.active { background: #0e639c; border-color: #1177bb; color: #fff; }
+    .toolbar .sep { width: 1px; height: 16px; background: #555; margin: 0 4px; }
+    .content {
+      flex: 1; overflow: auto; display: flex; flex-direction: column;
+      align-items: center; padding: 20px; background: #1e1e1e;
+    }
+    .page-container {
+      position: relative; margin-bottom: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      background: #fff;
+    }
+    .page-container canvas { display: block; }
+    .edit-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      cursor: text;
+    }
+    .text-edit {
+      position: absolute; background: rgba(255,255,100,0.2);
+      border: 1px dashed #ffd700; padding: 2px 4px;
+      font-size: 12px; color: #000; min-width: 20px; outline: none;
+      z-index: 10;
+    }
+    .text-edit:focus { border-color: #0e639c; background: rgba(14,99,156,0.2); }
+    #svg-container { width: 100%; max-width: 900px; }
+    #svg-container svg { width: 100%; height: auto; }
+    #svg-container svg text[contenteditable="true"] { cursor: text; }
+    #svg-container svg text[contenteditable="true"]:focus {
+      outline: 2px solid #0e639c; outline-offset: 1px;
+      background: rgba(14,99,156,0.15);
+    }
+    .err {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: #e81123; font-size: 13px;
+      flex-direction: column; gap: 12px;
+    }
+    .ld {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: #888; font-size: 14px;
+    }
+    .spinner {
+      width: 24px; height: 24px; border: 3px solid #333;
+      border-top-color: #0e639c; border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin-right: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .save-toast {
+      position: fixed; bottom: 30px; right: 20px;
+      background: #0e7a0d; color: #fff; padding: 6px 14px;
+      border-radius: 4px; font-size: 12px;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .save-toast.show { opacity: 1; }
+    .pdf-info {
+      position: fixed; bottom: 10px; left: 10px;
+      background: rgba(0,0,0,0.7); color: #aaa;
+      padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    }
+    .mode-indicator {
+      margin-left: auto; font-size: 11px; padding: 2px 8px;
+      background: #0e639c; color: #fff; border-radius: 3px;
+    }
+    .edit-panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #252526; border-top: 1px solid #3e3e42;
+      padding: 10px 16px; display: none; z-index: 100;
+    }
+    .edit-panel.show { display: block; }
+    .edit-panel label { font-size: 12px; color: #ccc; margin-right: 8px; }
+    .edit-panel input {
+      background: #3c3c3c; border: 1px solid #555; color: #ccc;
+      padding: 4px 8px; border-radius: 3px; font-size: 12px; width: 300px;
+      margin-right: 8px;
+    }
+    .edit-panel input:focus { outline: none; border-color: #0e639c; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="name" id="nm"></span>
+    <span class="stats" id="st">Loading...</span>
+  </div>
+  <div class="toolbar">
+    <button id="btn-edit-mode">Toggle Edit Mode</button>
+    <div class="sep"></div>
+    <button id="btn-save">Save Changes</button>
+    <button id="btn-download">Download</button>
+    <div class="sep"></div>
+    <button id="btn-zoom-in">+</button>
+    <button id="btn-zoom-out">&#8722;</button>
+    <span class="mode-indicator" id="modeIndicator" style="display:none;">Edit Mode ON</span>
+  </div>
+  <div class="content" id="content">
+    <div class="ld" id="ld"><div class="spinner"></div>Loading...</div>
+  </div>
+  <div class="err" id="err" style="display:none;"></div>
+  <div class="save-toast" id="toast">Saved!</div>
+  <div class="pdf-info" id="pdfInfo"></div>
+
+  <!-- Edit panel for SVG text modification -->
+  <div class="edit-panel" id="editPanel">
+    <label>Replace text:</label>
+    <input type="text" id="findText" placeholder="Find text...">
+    <input type="text" id="replaceText" placeholder="Replace with...">
+    <button id="btn-find">Find</button>
+    <button id="btn-replace">Replace</button>
+    <button id="btn-replace-all">Replace All</button>
+    <button id="btn-close-panel">Close</button>
+  </div>
+
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'unknown';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - PDF/Chart';
+
+    const ext = fp.toLowerCase().split('.').pop() || '';
+    let isEditMode = false;
+    let pdfBytes = null;
+    let svgData = null;
+    let svgDoc = null;
+    let zoomLevel = 1.5;
+    let currentEditTarget = null;
+
+    const api = window.parent && window.parent.omniview ? window.parent.omniview : window.omniview;
+
+    async function loadFile() {
+      document.getElementById('ld').style.display = 'flex';
+      document.getElementById('err').style.display = 'none';
+      document.getElementById('content').innerHTML = '<div class="ld" id="ld"><div class="spinner"></div>Loading...</div>';
+
+      try {
+        if (ext === 'pdf') {
+          await loadPDF();
+        } else if (ext === 'svg') {
+          await loadSVG();
+        } else {
+          throw new Error('Unsupported format: .' + ext);
+        }
+      } catch(e) {
+        document.getElementById('ld').style.display = 'none';
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').innerHTML = '&#x274C; ' + e.message;
+      }
+    }
+
+    async function loadPDF() {
+      const result = await api.readFile(fp);
+      if (!result.success) throw new Error(result.error || 'Failed to read file');
+
+      pdfBytes = new Uint8Array(result.content.split('').map(c => c.charCodeAt(0)));
+      const { PDFDocument } = PDFLib;
+      const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      const numPages = pdfDoc.getPageCount();
+
+      document.getElementById('st').textContent = numPages + ' pages · ' + (pdfBytes.length / 1024).toFixed(0) + ' KB';
+      document.getElementById('pdfInfo').textContent = 'PDF: ' + numPages + ' pages';
+
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+
+      for (let i = 1; i <= numPages; i++) {
+        const page = pdfDoc.getPage(i - 1);
+        const viewport = page.getViewport({ scale: zoomLevel });
+
+        const container = document.createElement('div');
+        container.className = 'page-container';
+        container.style.width = viewport.width + 'px';
+        container.style.height = viewport.height + 'px';
+        container.dataset.pageNum = i;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        container.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        if (isEditMode) {
+          const overlay = document.createElement('div');
+          overlay.className = 'edit-overlay';
+          overlay.addEventListener('click', (e) => {
+            const rect = container.getBoundingClientRect();
+            showTextEdit(e.clientX - rect.left, e.clientY - rect.top, i);
+          });
+          container.appendChild(overlay);
+        }
+
+        content.appendChild(container);
+      }
+    }
+
+    async function loadSVG() {
+      const result = await api.readFile(fp);
+      if (!result.success) throw new Error(result.error || 'Failed to read file');
+
+      svgData = result.content;
+      document.getElementById('st').textContent = svgData.length + ' chars';
+
+      const parser = new DOMParser();
+      svgDoc = parser.parseFromString(svgData, 'image/svg+xml');
+      const svgEl = svgDoc.querySelector('svg');
+      if (!svgEl) throw new Error('No SVG element found');
+
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.height = 'auto';
+      svgEl.style.background = '#fff';
+
+      if (isEditMode) {
+        // Make all text elements editable
+        svgEl.querySelectorAll('text').forEach(textEl => {
+          textEl.setAttribute('contenteditable', 'true');
+          textEl.style.cursor = 'text';
+          textEl.style.outline = 'none';
+          textEl.addEventListener('blur', () => {
+            svgData = new XMLSerializer().serializeToString(svgDoc.documentElement);
+            showToast('Text updated');
+          });
+        });
+
+        // Make all elements draggable
+        svgEl.querySelectorAll('*').forEach(el => {
+          el.setAttribute('draggable', 'true');
+          el.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', el.tagName);
+          });
+        });
+      }
+
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+      const wrapper = document.createElement('div');
+      wrapper.id = 'svg-container';
+      wrapper.appendChild(svgEl);
+      content.appendChild(wrapper);
+    }
+
+    function showTextEdit(x, y, pageNum) {
+      // Remove existing edit inputs
+      document.querySelectorAll('.text-edit-input').forEach(el => el.remove());
+
+      const input = document.createElement('input');
+      input.className = 'text-edit-input';
+      input.type = 'text';
+      input.style.cssText = `
+        position: absolute; left: ${x}px; top: ${y}px;
+        background: rgba(255,255,100,0.3); border: 1px dashed #ffd700;
+        color: #000; padding: 2px 6px; font-size: 13px; min-width: 100px;
+        z-index: 100; outline: none;
+      `;
+      input.placeholder = 'Enter text...';
+      document.getElementById('content').appendChild(input);
+      input.focus();
+      currentEditTarget = { x, y, pageNum, element: input };
+
+      input.addEventListener('blur', () => {
+        if (currentEditTarget && currentEditTarget.element === input) {
+          currentEditTarget.text = input.value;
+          currentEditTarget = null;
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') { input.value = ''; input.blur(); }
+      });
+    }
+
+    // Toggle edit mode
+    document.getElementById('btn-edit-mode').addEventListener('click', () => {
+      isEditMode = !isEditMode;
+      const btn = document.getElementById('btn-edit-mode');
+      btn.classList.toggle('active', isEditMode);
+      btn.textContent = isEditMode ? 'Edit Mode: ON' : 'Toggle Edit Mode';
+      document.getElementById('modeIndicator').style.display = isEditMode ? 'inline' : 'none';
+      loadFile();
+    });
+
+    // Zoom
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      zoomLevel = Math.min(zoomLevel + 0.25, 4);
+      loadFile();
+    });
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      zoomLevel = Math.max(zoomLevel - 0.25, 0.5);
+      loadFile();
+    });
+
+    // Save (for PDF, save changes back)
+    async function saveChanges() {
+      if (ext === 'pdf' && pdfBytes) {
+        try {
+          const { PDFDocument } = PDFLib;
+          const newDoc = await PDFDocument.load(pdfBytes);
+          // Note: pdf-lib cannot directly edit text in existing PDFs easily
+          // This is a limitation - we can only save as-is or add annotations
+          const modifiedBytes = await newDoc.save();
+          downloadBlob(modifiedBytes, 'application/pdf', name + '_edited.pdf');
+          showToast('PDF saved (annotations)');
+        } catch(e) {
+          alert('Save failed: ' + e.message);
+        }
+      } else if (ext === 'svg' && svgData) {
+        try {
+          const blob = new Blob([svgData], { type: 'image/svg+xml' });
+          downloadBlob(blob, 'image/svg+xml', name.replace('.svg', '') + '_edited.svg');
+          showToast('SVG saved');
+        } catch(e) {
+          alert('Save failed: ' + e.message);
+        }
+      }
+    }
+
+    function downloadBlob(data, mimeType, filename) {
+      const blob = data instanceof Uint8Array ? new Blob([data], { type: mimeType }) : data;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('btn-save').addEventListener('click', saveChanges);
+    document.getElementById('btn-download').addEventListener('click', saveChanges);
+
+    // Edit panel for SVG text find/replace
+    document.getElementById('btn-close-panel').addEventListener('click', () => {
+      document.getElementById('editPanel').classList.remove('show');
+    });
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    loadFile();
+  </script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>Log</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d0d; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Consolas", monospace; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #1e1e1e; border-bottom: 1px solid #2a2a2a; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #555; }
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #1e1e1e; border-bottom: 1px solid #2a2a2a; }
+    .toolbar button { background: #2a2a2a; border: none; color: #aaa; padding: 2px 8px; border-radius: 2px; font-size: 10px; cursor: pointer; }
+    .toolbar button:hover { background: #3a3a3a; color: #fff; }
+    .toolbar button.active { background: #0078d4; color: #fff; }
+    .toolbar input { width: 100px; padding: 1px 6px; font-size: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; color: #ccc; border-radius: 2px; }
+    pre { flex: 1; overflow: auto; padding: 10px 14px; font-size: 11px; line-height: 1.6; }
+    .line { display: flex; gap: 12px; }
+    .ln { color: #555; min-width: 36px; text-align: right; user-select: none; flex-shrink: 0; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <div class="toolbar">
+    <button id="all" class="active" data-level="">全部</button>
+    <button id="errBtn" data-level="ERROR">ERROR</button>
+    <button id="warnBtn" data-level="WARN">WARN</button>
+    <button id="infoBtn" data-level="INFO">INFO</button>
+    <span style="flex:1"></span>
+    <input type="text" id="search" placeholder="搜索...">
+  </div>
+  <pre id="lines"></pre>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'log';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - Log';
+
+    let allLines = [];
+    let currentLevel = '';
+
+    const LEVEL_COLORS = {
+      'ERROR': '#f48771', 'FATAL': '#f48771', 'CRIT': '#f48771',
+      'WARN': '#ce9178', 'WARNING': '#ce9178',
+      'INFO': '#4fc1ff', 'DEBUG': '#89d185', 'TRACE': '#6a9955'
+    };
+
+    function highlightLine(text) {
+      // Colorize log levels
+      return text.replace(/\b(ERROR|FATAL|CRIT|WARN|WARNING|INFO|DEBUG|TRACE)\b/g, (match) => {
+        const color = LEVEL_COLORS[match] || '#d4d4d4';
+        return `<span style="color:${color};font-weight:600">${match}</span>`;
+      })
+      // Colorize timestamps
+      .replace(/\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}[\.\d+]?[Z±\s]*/g, '<span style="color:#6a9955">$&</span>')
+      // Colorize hex
+      .replace(/\b0x[0-9a-fA-F]+\b/g, '<span style="color:#b5cea8">$&</span>')
+      // Colorize numbers
+      .replace(/\b(\d+)\b/g, '<span style="color:#b5cea8">$1</span>');
+    }
+
+    function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderLines(lines) {
+      const container = document.getElementById('lines');
+      let html = '';
+      const maxLines = 3000;
+      const start = Math.max(0, lines.length - maxLines);
+      for (let i = start; i < lines.length; i++) {
+        const line = lines[i];
+        const filtered = !currentLevel || line.toUpperCase().includes(currentLevel.toUpperCase());
+        if (!filtered && currentLevel !== '') continue;
+        html += `<div class="line"><span class="ln">${i + 1}</span><span>${highlightLine(escapeHtml(line))}</span></div>`;
+      }
+      if (lines.length > maxLines) {
+        html = `<div style="color:#555;padding:4px 0;font-size:10px;">... 仅显示最近 ${maxLines} 行，共 ${lines.length} 行 ...</div>\n` + html;
+      }
+      container.innerHTML = html;
+      container.scrollTop = container.scrollHeight;
+      document.getElementById('st').textContent = lines.length + ' 行' + (currentLevel ? ' | ' + currentLevel : '');
+    }
+
+    document.querySelectorAll('.toolbar button[data-level]').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentLevel = btn.dataset.level;
+        const filtered = currentLevel
+          ? allLines.filter(l => l.toUpperCase().includes(currentLevel.toUpperCase()))
+          : allLines;
+        renderLines(filtered);
+      };
+    });
+
+    document.getElementById('search').oninput = (e) => {
+      const q = e.target.value.toLowerCase();
+      if (!q) { renderLines(allLines); return; }
+      const filtered = allLines.filter(l => l.toLowerCase().includes(q));
+      renderLines(filtered);
+    };
+
+    async function load() {
+      try {
+        const result = await window.parent.omniview.readFile(fp);
+        if (!result.success) throw new Error(result.error);
+        allLines = result.content.split('\n').filter(l => l.trim());
+        renderLines(allLines);
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

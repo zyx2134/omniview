@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>YAML</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e1e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-family: "Consolas", "Fira Code", monospace; }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: #252526; border-bottom: 1px solid #333; height: 32px; flex-shrink: 0; }
+    .bar .name { flex: 1; font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar .stats { font-size: 10px; color: #666; }
+    pre { flex: 1; overflow: auto; padding: 14px; font-size: 12px; line-height: 1.6; }
+    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 12px; }
+    .k { color: #9cdcfe; } /* key */
+    .s { color: #ce9178; } /* string */
+    .n { color: #b5cea8; } /* number */
+    .b { color: #569cd6; } /* boolean */
+    .c { color: #6a9955; } /* comment */
+    .p { color: #888; }    /* punctuation */
+    .d { color: #d7ba7d; } /* directive */
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="name" id="nm"></span><span class="stats" id="st"></span></div>
+  <pre><code id="code"></code></pre>
+  <div class="err" id="err" style="display:none;"></div>
+  <script>
+    const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+    const name = fp.split(/\\|\//).pop() || 'yaml';
+    document.getElementById('nm').textContent = name;
+    document.title = name + ' - YAML';
+
+    function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function syntaxHighlightYaml(text) {
+      const lines = text.split('\n');
+      return lines.map((line, idx) => {
+        let highlighted = escapeHtml(line);
+        // Comments
+        if (line.trim().startsWith('#')) {
+          return '<span class="c">' + highlighted + '</span>';
+        }
+        // Directive
+        if (line.startsWith('%')) {
+          return '<span class="d">' + highlighted + '</span>';
+        }
+        // Key-value pairs
+        const match = line.match(/^(\s*)([-\d\w_\-.*]*)\s*:\s*(.*)$/);
+        if (match) {
+          const indent = match[1];
+          const key = match[2];
+          const val = match[3];
+          let keyClass = 'k';
+          if (key === '' || key === '-') keyClass = 'p';
+          let valHtml = '';
+          if (val) {
+            if (/^["']/.test(val)) valHtml = '<span class="s">' + escapeHtml(val) + '</span>';
+            else if (/^(true|false|null|yes|no|on|off)$/i.test(val)) valHtml = '<span class="b">' + escapeHtml(val) + '</span>';
+            else if (/^-?\d+(\.\d+)?$/.test(val)) valHtml = '<span class="n">' + escapeHtml(val) + '</span>';
+            else valHtml = '<span class="s">' + escapeHtml(val) + '</span>';
+          }
+          return escapeHtml(indent) + '<span class="' + keyClass + '">' + escapeHtml(key) + '</span><span class="p">:</span> ' + valHtml;
+        }
+        // List items
+        const listMatch = line.match(/^(\s*)(-\s*)(.*)$/);
+        if (listMatch) {
+          const indent = listMatch[1];
+          const dash = listMatch[2];
+          const content = listMatch[3];
+          let contentHtml = '';
+          if (content) {
+            if (/^["']/.test(content)) contentHtml = '<span class="s">' + escapeHtml(content) + '</span>';
+            else if (/^-?\d+(\.\d+)?$/.test(content)) contentHtml = '<span class="n">' + escapeHtml(content) + '</span>';
+            else contentHtml = escapeHtml(content);
+          }
+          return escapeHtml(indent) + '<span class="p">' + escapeHtml(dash) + '</span> ' + contentHtml;
+        }
+        return highlighted;
+      }).join('\n');
+    }
+
+    async function load() {
+      try {
+        const result = await window.omniview.readFile(fp);
+        if (!result.success) throw new Error(result.error);
+        const raw = result.content;
+        document.getElementById('st').textContent = raw.length + ' chars, ' + raw.split('\n').length + ' lines';
+        document.getElementById('code').innerHTML = syntaxHighlightYaml(raw);
+      } catch (e) {
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').textContent = 'Error: ' + e.message;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
