@@ -241,7 +241,21 @@ export default function App() {
         )}
         
         <div className="nav-spacer" />
-        
+
+        {/* Settings button — always visible on home page */}
+        {state.page === 'home' && (
+          <button
+            className="nav-btn"
+            onClick={() => navigate('settings')}
+            title="设置"
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M7.5 1.5l.7 1.8 1.9.3.5 1.7 1.6.6.1 2-1.7.5-.6 1.8-1.9.2-.4 1.9-1.8-.7-1.4 1.2-1.2-1.5 1-1.6L1.5 7l-1.3-1.2.4-1.8L1.6 3l1.5-.7L3.5.5l1.8.4.7-1.4zM8 10a2 2 0 100 4 2 2 0 000-4z"/>
+            </svg>
+            <span>设置</span>
+          </button>
+        )}
+
         {/* Action buttons */}
         {state.page === 'settings' && (
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('extensions')} title="扩展管理">
