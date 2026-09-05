@@ -1,10 +1,6 @@
 import { extname, basename } from 'path';
 import { ExtensionManager } from './extensions/manager';
 
-/**
- * Built-in handlers for common file types.
- * Handler names match HTML files in src/renderer/handlers/
- */
 const BUILTIN_FORMATS: Record<string, { handler: string; label: string }> = {
   '.png':  { handler: 'image',  label: 'PNG' },
   '.jpg':  { handler: 'image',  label: 'JPEG' },
@@ -72,10 +68,9 @@ export class FileRouter {
   constructor(private extManager: ExtensionManager) {}
 
   async route(filePath: string): Promise<RouteResult> {
-    // Normalize: strip file:// prefix and convert backslashes to forward slashes
     let cleanPath = filePath.replace(/^file:\/\//, '').replace(/\\/g, '/');
-    const extWithDot = extname(cleanPath).toLowerCase(); // Keep the dot for built-in lookup
-    const ext = extWithDot.replace(/^\./, ''); // No dot for extension manager
+    const extWithDot = extname(cleanPath).toLowerCase();
+    const ext = extWithDot.replace(/^\./, '');
 
     // 1. Try extensions first
     const extHandlers = this.extManager.getByFormat(ext);
@@ -83,19 +78,21 @@ export class FileRouter {
       const primary = extHandlers[0];
       const extDef = this.extManager.get(primary.id);
       if (extDef) {
+        // If extension has no custom panel, fall back to the default handler
+        const panel = extDef.ui?.panel;
         return {
           handled: true,
           type: 'extension',
-          handler: extDef.ui.panel || 'index',
-          panel: extDef.ui.panel,
-          panelPath: extDef.path,
+          handler: panel || 'default',
+          panel,
+          panelPath: panel ? extDef.path : undefined,
           extensionId: extDef.id,
           extensionName: extDef.name,
         };
       }
     }
 
-    // 2. Fallback to built-in handlers (keys have dot, e.g. '.png')
+    // 2. Fallback to built-in handlers
     const builtin = BUILTIN_FORMATS[extWithDot];
     if (builtin) {
       return {
@@ -106,7 +103,12 @@ export class FileRouter {
       };
     }
 
-    // 3. Unknown format
-    return { handled: false, type: 'built-in' };
+    // 3. Unknown format → still show the default info view
+    return {
+      handled: true,
+      type: 'built-in',
+      handler: 'default',
+      label: ext ? ext.toUpperCase() : 'FILE',
+    };
   }
 }

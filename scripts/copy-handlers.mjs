@@ -9,7 +9,7 @@ const handlersSrc = join(root, 'src', 'renderer', 'handlers');
 const handlersDst = join(root, 'dist', 'renderer', 'handlers');
 mkdirSync(handlersDst, { recursive: true });
 
-for (const f of ['image.html', 'video.html', 'audio.html', 'text.html', 'pdf-chart.html']) {
+for (const f of ['image.html', 'video.html', 'audio.html', 'text.html', 'pdf-chart.html', 'default.html']) {
   const src = join(handlersSrc, f);
   const dst = join(handlersDst, f);
   copyFileSync(src, dst);

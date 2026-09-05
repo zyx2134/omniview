@@ -39,7 +39,7 @@ export function ViewerView({ filePath, result, extension, onBack, onTitleChange 
   useEffect(() => {
     setLoaded(false);
     let url = '';
-    if (result.type === 'extension' && extension?.ui.panel && result.panelPath) {
+    if (result.type === 'extension' && extension?.ui?.panel && result.panelPath) {
       const panelFile = extension.ui.panel.endsWith('.html')
         ? extension.ui.panel
         : `${extension.ui.panel}.html`;
@@ -49,6 +49,9 @@ export function ViewerView({ filePath, result, extension, onBack, onTitleChange 
     }
     if (iframeRef.current && url) {
       iframeRef.current.src = url;
+    } else if (iframeRef.current) {
+      // No handler found — reset src to avoid stale content
+      iframeRef.current.src = '';
     }
   }, [result, extension, filePath]);
 

@@ -198,12 +198,21 @@ ipcMain.handle('ext:check-conflict', (_e, m) => extensionManager.checkConflict(m
 // 鈹€鈹€鈹€ IPC: App info 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), name: app.getName() }));
 
-// 鈹€鈹€鈹€ IPC: Handle second instance 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── Second-instance handler (double-click from file explorer) ──────────────
+// requestSingleInstanceLock() returns false if another instance is already running.
+// When it returns false we quit; the existing instance receives 'second-instance'
+// with the new argv and opens the file there.
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) app.quit();
-else {
-  app.on('second-instance', (_e, argv) => {
-    const fileArg = argv.find(a => a.endsWith('.dex') || ['.png', '.jpg', '.mp4', '.mp3', '.txt', '.glb'].some(ext => a.toLowerCase().endsWith(ext)));
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    // Filter to actual file paths (skip Electron flags like --type=, --no-sandbox, etc.)
+    const fileArgs = argv.filter(a => !a.startsWith('--') && a.length > 1);
+    const fileArg = fileArgs.find(a =>
+      a.toLowerCase().endsWith('.dex') ||
+      /\.(png|jpe?g|gif|bmp|webp|apng|svg|pdf|mp4|webm|avi|mov|mkv|flv|wmv|mp3|wav|flac|ogg|m4a|aac|txt|md|json|xml|html|htm|css|js|ts|jsx|tsx|py|java|c|cpp|h|rs|go|rb|sh|bat|ini|yaml|yml|toml|csv|log|sql|qmc0|qmcflac|qmcogg|glb|gltf|obj|fbx|env|b64|heic|heif)$/i.test(a)
+    );
     if (fileArg && mainWindow) {
       if (fileArg.toLowerCase().endsWith('.dex')) {
         extensionManager.install(fileArg).then(r => {
@@ -219,11 +228,10 @@ else {
   });
 }
 
-// 鈹€鈹€鈹€ Command-line file argument 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-// Only process actual file arguments (skip exe path and flags)
+// ─── Command-line file argument (first-instance launch with file) ───────────
 const cliArgs = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const fileArg = cliArgs.find(a => a.length > 1);
-if (fileArg && !mainWindow) {
+if (fileArg) {
   app.whenReady().then(async () => {
     await createWindow();
     if (fileArg.toLowerCase().endsWith('.dex')) {

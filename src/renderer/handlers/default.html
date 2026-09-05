@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' file:;">
+  <title>File Info</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #121212;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Segoe UI", sans-serif;
+      color: #f0f0f0;
+    }
+    .card {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 40px 48px;
+      text-align: center;
+      max-width: 420px;
+      width: 100%;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      line-height: 1;
+    }
+    .filename {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      word-break: break-all;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 12px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row-key { color: #888; }
+    .row-val { color: #c8c8c8; text-align: right; word-break: break-all; }
+    .err { color: #e81123; font-size: 12px; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="icon" id="icon">📄</div>
+    <div class="filename" id="name">加载中...</div>
+    <div class="subtitle" id="sub"></div>
+    <div id="info"></div>
+  </div>
+  <div class="err" id="err" style="display:none;"></div>
+
+  <script>
+    (function() {
+      const fp = decodeURIComponent(new URLSearchParams(location.search).get('file') || '');
+      const name = fp.split(/\\|\//).pop() || 'unknown';
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+
+      document.getElementById('name').textContent = name;
+      document.title = name + ' - Omniview';
+
+      const ICONS = {
+        image: ['png','jpg','jpeg','gif','bmp','webp','apng','svg','heic','heif','tiff','tif'],
+        video: ['mp4','webm','avi','mov','mkv','flv','wmv','mts','m2ts'],
+        audio: ['mp3','wav','flac','ogg','m4a','aac','wma','opus'],
+        code:  ['js','ts','jsx','tsx','py','java','c','cpp','h','rs','go','rb','sh','bat','css','json','xml','html','yaml','yml','toml','ini','sql','md','log'],
+        archive: ['zip','rar','7z','tar','gz','bz2','xz','dex'],
+        pdf:   ['pdf'],
+        doc:   ['doc','docx','xls','xlsx','ppt','pptx'],
+      };
+      function getIcon(ext) {
+        for (const [type, exs] of Object.entries(ICONS)) {
+          if (exs.includes(ext)) return type;
+        }
+        return 'default';
+      }
+      const ICON_MAP = {
+        image: '🖼️', video: '🎬', audio: '🎵', code: '📝',
+        archive: '📦', pdf: '📑', doc: '📋', default: '📄'
+      };
+      document.getElementById('icon').textContent = ICON_MAP[getIcon(ext)] || '📄';
+
+      function fmtSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+        if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+        return (bytes/1073741824).toFixed(2) + ' GB';
+      }
+
+      async function load() {
+        try {
+          const statResult = await window.parent.omniview.readFileBuffer(fp);
+          if (!statResult.success) throw new Error(statResult.error);
+
+          const size = statResult.buffer.byteLength;
+          const mimeMap = {
+            png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif',
+            bmp:'image/bmp', webp:'image/webp', svg:'image/svg+xml', heic:'image/heic',
+            mp4:'video/mp4', webm:'video/webm', avi:'video/x-msvideo', mov:'video/quicktime',
+            mkv:'video/x-matroska', flv:'video/x-flv', wmv:'video/x-ms-wmv',
+            mp3:'audio/mpeg', wav:'audio/wav', flac:'audio/flac', ogg:'audio/ogg',
+            m4a:'audio/mp4', aac:'audio/aac',
+            pdf:'application/pdf', json:'application/json', xml:'text/xml',
+            txt:'text/plain', md:'text/markdown', csv:'text/csv',
+          };
+          const mime = mimeMap[ext] || 'application/octet-stream';
+
+          document.getElementById('sub').textContent = mime;
+          document.getElementById('info').innerHTML = [
+            ['扩展名', '.' + ext.toUpperCase()],
+            ['文件大小', fmtSize(size)],
+            ['文件路径', fp],
+          ].map(([k,v]) => `<div class="row"><span class="row-key">${k}</span><span class="row-val">${v}</span></div>`).join('');
+        } catch (e) {
+          document.getElementById('card').style.display = 'none';
+          document.getElementById('err').style.display = 'flex';
+          document.getElementById('err').textContent = 'Error: ' + e.message;
+        }
+      }
+      load();
+    })();
+  </script>
+</body>
+</html>
