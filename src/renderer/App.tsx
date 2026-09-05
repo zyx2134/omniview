@@ -22,20 +22,18 @@ export default function App() {
   const [installResult, setInstallResult] = useState<{ success: boolean; name: string } | null>(null);
   const dragCounter = useRef(0);
 
-  // Init
+  // Init — show window IMMEDIATELY, load data in background
   useEffect(() => {
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; setLoading(false); }, 600);
-    Promise.all([
-      window.omniview.listExtensions(),
-      window.omniview.listRecent(),
-    ]).then(([exts, recent]) => {
-      if (!timedOut) {
-        setState(s => ({ ...s, extensions: exts, recentFiles: recent }));
-        setLoading(false);
-      }
-    }).catch(() => { if (!timedOut) setLoading(false); });
-    return () => clearTimeout(timer);
+    setLoading(false); // Hide splash instantly
+    // Extensions arrive via ext:ready IPC event (fired after init completes)
+    const u0 = window.omniview.onExtensionsReady((exts) =>
+      setState(s => ({ ...s, extensions: exts }))
+    );
+    // Fetch recent files (fast IPC call)
+    window.omniview.listRecent().then(recent =>
+      setState(s => ({ ...s, recentFiles: recent }))
+    );
+    return () => { u0(); };
   }, []);
 
   // Events

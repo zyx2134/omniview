@@ -47,4 +47,13 @@ contextBridge.exposeInMainWorld('omniview', {
     ipcRenderer.on('file:opened', h);
     return () => ipcRenderer.removeListener('file:opened', h);
   },
+  onExtensionsReady: (cb: (exts: any[]) => void) => {
+    const h = (_: any, exts: any[]) => cb(exts);
+    ipcRenderer.on('ext:ready', h);
+    return () => ipcRenderer.removeListener('ext:ready', h);
+  },
+
+  // File association
+  registerAssociations: () => ipcRenderer.invoke('assoc:register'),
+  checkAssociation: (ext: string) => ipcRenderer.invoke('assoc:check', ext),
 });

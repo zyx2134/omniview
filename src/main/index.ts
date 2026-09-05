@@ -5,8 +5,9 @@ import { readFile, writeFile, mkdir, stat, readdir, rm, unlink, rename } from 'f
 import { existsSync } from 'fs';
 import { ExtensionManager } from './extensions/manager';
 import { FileRouter } from './router';
+import { registerFileAssociations, isAssociationRegistered } from './associations';
 
-// 鈹€鈹€鈹€ Paths 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── Paths ────────────────────────────────────────────────────────────────────
 const APP_DATA = join(homedir(), '.omniview');
 const RECENT_FILE = join(APP_DATA, 'recent.json');
 const STATE_FILE = join(APP_DATA, 'state.json');
@@ -15,7 +16,7 @@ let mainWindow: BrowserWindow | null = null;
 const extensionManager = new ExtensionManager();
 const fileRouter = new FileRouter(extensionManager);
 
-// 鈹€鈹€鈹€ Recent files 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── Recent files ─────────────────────────────────────────────────────────────
 async function loadRecent(): Promise<string[]> {
   if (!existsSync(RECENT_FILE)) return [];
   try { return JSON.parse(await readFile(RECENT_FILE, 'utf-8')) as string[]; }
@@ -35,7 +36,7 @@ async function addToRecent(filePath: string) {
   return next;
 }
 
-// 鈹€鈹€鈹€ Window state 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── Window state ─────────────────────────────────────────────────────────────
 async function loadWindowState() {
   if (!existsSync(STATE_FILE)) return {};
   try { return JSON.parse(await readFile(STATE_FILE, 'utf-8')); }
@@ -48,7 +49,7 @@ async function saveWindowState(win: BrowserWindow) {
   await writeFile(STATE_FILE, JSON.stringify({ x, y, width, height, maximized: win.isMaximized() }), 'utf-8');
 }
 
-// 鈹€鈹€鈹€ Create window 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── Create window ────────────────────────────────────────────────────────────
 async function createWindow() {
   const saved = await loadWindowState();
 
@@ -90,18 +91,22 @@ async function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(async () => {
-  // Fire extensions init in background 鈥?don't block window creation
-  await extensionManager.init();
-  await createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+// ─── Startup: show window IMMEDIATELY, load data in background ────────────────
+// Extension init and recent files are async I/O — do NOT await them before
+// showing the window. The renderer updates itself via IPC when data arrives.
+createWindow();
+extensionManager.init().then(() => {
+  BrowserWindow.getAllWindows().forEach(win =>
+    win.webContents.send('ext:ready', extensionManager.getAll())
+  );
 });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// 鈹€鈹€鈹€ IPC: Window 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: Window ──────────────────────────────────────────────────────────────
 ipcMain.on('window:minimize', () => mainWindow?.minimize());
 ipcMain.on('window:maximize', () => mainWindow?.maximize());
 ipcMain.on('window:close', () => mainWindow?.close());
@@ -111,7 +116,7 @@ ipcMain.handle('window:get-state', async () => {
   return { x: b.x, y: b.y, width: b.width, height: b.height, maximized: mainWindow.isMaximized() };
 });
 
-// 鈹€鈹€鈹€ IPC: File open 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: File open ───────────────────────────────────────────────────────────
 ipcMain.handle('file:open', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
     title: 'Open File',
@@ -123,12 +128,12 @@ ipcMain.handle('file:open', async () => {
   return { path: filePaths[0], recent };
 });
 
-// 鈹€鈹€鈹€ IPC: File route 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: File route ──────────────────────────────────────────────────────────
 ipcMain.handle('file:route', async (_e, filePath: string) => {
   return fileRouter.route(filePath);
 });
 
-// 鈹€鈹€鈹€ IPC: File read 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: File read ───────────────────────────────────────────────────────────
 ipcMain.handle('file:read', async (_e, filePath: string) => {
   try { return { success: true, content: await readFile(filePath, 'utf-8') }; }
   catch (e: any) { return { success: false, error: e.message }; }
@@ -141,7 +146,7 @@ ipcMain.handle('file:read-buffer', async (_e, filePath: string) => {
   } catch (e: any) { return { success: false, error: e.message }; }
 });
 
-// 鈹€鈹€鈹€ IPC: File stat 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: File stat ───────────────────────────────────────────────────────────
 ipcMain.handle('file:stat', async (_e, filePath: string) => {
   try {
     const st = await stat(filePath);
@@ -149,15 +154,12 @@ ipcMain.handle('file:stat', async (_e, filePath: string) => {
   } catch (e: any) { return { success: false, error: e.message }; }
 });
 
-// 鈹€鈹€鈹€ IPC: Recent files 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: Recent files ────────────────────────────────────────────────────────
 ipcMain.handle('recent:list', async () => {
   const files = await loadRecent();
-  // Fast check: just filter by existence without stat-ing large files
   const valid: string[] = [];
   for (const f of files) {
-    try {
-      if (existsSync(f)) valid.push(f);
-    } catch { /* skip */ }
+    try { if (existsSync(f)) valid.push(f); } catch { /* skip */ }
   }
   return valid;
 });
@@ -171,7 +173,7 @@ ipcMain.handle('recent:clear', async () => {
   return [];
 });
 
-// 鈹€鈹€鈹€ IPC: File write 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: File write ──────────────────────────────────────────────────────────
 ipcMain.handle('file:write', async (_e, filePath: string, content: string) => {
   try {
     await writeFile(filePath, content, 'utf-8');
@@ -179,7 +181,7 @@ ipcMain.handle('file:write', async (_e, filePath: string, content: string) => {
   } catch (e: any) { return { success: false, error: e.message }; }
 });
 
-// 鈹€鈹€鈹€ IPC: Extension 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: Extension ───────────────────────────────────────────────────────────
 ipcMain.handle('ext:list', () => extensionManager.getAll());
 ipcMain.handle('ext:install', async (_e, p) => {
   const r = await extensionManager.install(p);
@@ -195,28 +197,31 @@ ipcMain.handle('ext:get', (_e, id) => extensionManager.get(id));
 ipcMain.handle('ext:update-config', (_e, id, cfg) => extensionManager.updateConfig(id, cfg));
 ipcMain.handle('ext:check-conflict', (_e, m) => extensionManager.checkConflict(m as any));
 
-// 鈹€鈹€鈹€ IPC: App info 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ─── IPC: App info ────────────────────────────────────────────────────────────
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), name: app.getName() }));
 
-// ─── Second-instance handler (double-click / right-click "Open with") ────────
-// When Windows Explorer opens a file via right-click → Open with → Omniview,
-// it launches argv = [exePath, filePath]. Since requestSingleInstanceLock()
-// prevents a second window, the existing instance receives 'second-instance'
-// and we open the file there instead.
-//
-// Windows may pass extra flags after the file (e.g. "--sandbox"), so we find
-// the FIRST non-exe argument that looks like an actual file path.
+// ─── IPC: File association (portable mode) ────────────────────────────────────
+ipcMain.handle('assoc:register', async () => {
+  return registerFileAssociations();
+});
+
+ipcMain.handle('assoc:check', async (_e, ext: string) => {
+  return isAssociationRegistered(ext);
+});
+
+// ─── Second-instance handler (right-click "Open with") ────────────────────────
+// Windows passes argv = [exePath, filePath] when opening via right-click.
+// requestSingleInstanceLock() prevents a second window, so the existing instance
+// receives 'second-instance' with the new args.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  // Another instance is already running — exit this one.
-  // The file will be opened by the existing instance via its 'second-instance' handler.
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
     if (!mainWindow) return;
-    // Strip surrounding quotes (Windows sometimes adds them for paths with spaces)
+    // Strip surrounding quotes (Windows adds them for paths with spaces)
     const rawArgs = argv.map(a => a.replace(/^"|"$/g, ''));
-    // Find the first non-exe argument that looks like a file
+    // Find the first argument that looks like an actual file (skip .exe and flags)
     const fileArg = rawArgs.find(a =>
       !a.toLowerCase().endsWith('.exe') &&
       (a.toLowerCase().endsWith('.dex') ||
@@ -237,7 +242,7 @@ if (!gotLock) {
   });
 }
 
-// ─── Command-line file argument (first-instance launch with file) ───────────
+// ─── Command-line file argument (first-instance launch with file) ─────────────
 const cliArgs = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const fileArg = cliArgs.find(a => a.length > 1);
 if (fileArg) {
@@ -254,4 +259,3 @@ if (fileArg) {
     }
   });
 }
-

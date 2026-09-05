@@ -20,6 +20,9 @@ export interface OmniviewAPI {
   onExtensionInstalled: (cb: (ext: Extension) => void) => () => void;
   onExtensionRemoved: (cb: (id: string) => void) => () => void;
   onFileOpened: (cb: (data: { filePath: string; result: any }) => void) => () => void;
+  onExtensionsReady: (cb: (exts: Extension[]) => void) => () => void;
+  registerAssociations: () => Promise<{ success: boolean; error?: string }>;
+  checkAssociation: (ext: string) => Promise<boolean>;
 }
 
 export interface Extension {
