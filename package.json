@@ -39,10 +39,12 @@
     },
     "files": [
       "dist/**/*",
-      "package.json"
+      "package.json",
+      "extensions/**/*",
+      "build/**/*"
     ],
     "extraResources": [
-      { "from": "src/renderer/handlers", "to": "handlers", "filter": ["**/*.html"] },
+      { "from": "dist/renderer/handlers", "to": "handlers", "filter": ["**/*.html"] },
       { "from": "extensions", "to": "extensions", "filter": ["**/*"] }
     ],
     "asarUnpack": ["**/handlers/*.html", "**/extensions/**/*.html", "**/*.dex"],
@@ -51,15 +53,11 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "icon": "build/icon.ico",
@@ -68,6 +66,26 @@
       "publish": null,
       "sign": null,
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
