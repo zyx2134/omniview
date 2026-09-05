@@ -6,28 +6,11 @@
   <title>图片</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d0d0d; height: 100vh; overflow: hidden; font-family: "Segoe UI", sans-serif; }
-    .toolbar {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
-      background: #1c1c1c;
-      border-bottom: 1px solid #2e2e2e;
-      height: 38px;
-    }
-    .toolbar button {
-      background: #2a2a2a; border: 1px solid #3e3e42;
-      color: #ccc; padding: 3px 10px; border-radius: 3px;
-      font-size: 12px; cursor: pointer; transition: all 100ms;
-    }
-    .toolbar button:hover { background: #3e3e42; color: #fff; }
-    .toolbar .sep { width: 1px; height: 18px; background: #3e3e42; margin: 0 4px; }
-    .toolbar .zoom { font-size: 11px; color: #888; min-width: 44px; text-align: center; }
-    .toolbar .info { margin-left: auto; font-size: 11px; color: #666; }
-    .canvas {
-      width: 100%; height: calc(100vh - 38px);
-      display: flex; align-items: center; justify-content: center;
-      overflow: hidden; cursor: grab;
-      background: #0a0a0a;
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background-image:
         linear-gradient(45deg, #111 25%, transparent 25%),
         linear-gradient(-45deg, #111 25%, transparent 25%),
@@ -36,72 +19,43 @@
       background-size: 16px 16px;
       background-position: 0 0, 0 8px, 8px -8px, -8px 0;
     }
-    .canvas:active { cursor: grabbing; }
-    #img { transition: transform 60ms ease-out; transform-origin: center; image-rendering: auto; }
-    .err { display: flex; align-items: center; justify-content: center; height: 100%; color: #e81123; font-size: 13px; flex-direction: column; gap: 8px; }
+    #img {
+      display: block;
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+    .err { display: flex; align-items: center; justify-content: center; height: 100vh; color: #e81123; font-size: 13px; flex-direction: column; gap: 8px; }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <button id="out">-</button>
-    <span class="zoom" id="z">100%</span>
-    <button id="in">+</button>
-    <div class="sep"></div>
-    <button id="fit">Fit</button>
-    <button id="reset">Reset</button>
-    <span class="info" id="name"></span>
-  </div>
-  <div class="canvas" id="c">
-    <img id="img">
-  </div>
+  <img id="img" alt="">
+  <div class="err" id="err" style="display:none;"></div>
   <script>
-    const params = new URLSearchParams(location.search);
-    const fp = decodeURIComponent(params.get('file') || '');
-    document.getElementById('name').textContent = fp.split(/\\|\//).pop() || '';
-    document.title = (fp.split(/\\|\//).pop() || 'Image') + ' - Omniview';
+    (function() {
+      const params = new URLSearchParams(location.search);
+      const fp = decodeURIComponent(params.get('file') || '');
+      const name = fp.split(/\\|\//).pop() || '图片';
+      document.title = name + ' - Omniview';
+      document.getElementById('img').alt = name;
 
-    const img = document.getElementById('img');
-    const canvas = document.getElementById('c');
-    let scale = 1, px = 0, py = 0, dragging = false, mx = 0, my = 0;
+      const img = document.getElementById('img');
+      // file:// on Windows needs three slashes: file:///C:/path
+      const src = 'file:///' + fp.replace(/^\/+/, '').replace(/\\/g, '/');
+      img.src = src;
 
-    function apply() {
-      img.style.transform = `translate(${px}px,${py}px) scale(${scale})`;
-      document.getElementById('z').textContent = Math.round(scale * 100) + '%';
-    }
-    function fit() {
-      const r = canvas.getBoundingClientRect();
-      if (!img.naturalWidth) return;
-      scale = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight, 1);
-      px = (r.width - img.naturalWidth * scale) / 2;
-      py = (r.height - img.naturalHeight * scale) / 2;
-      apply();
-    }
+      img.onerror = function() {
+        document.getElementById('img').style.display = 'none';
+        document.getElementById('err').style.display = 'flex';
+        document.getElementById('err').innerHTML =
+          '<div>无法加载图片</div>' +
+          '<div style="font-size:11px;color:#666;margin-top:4px;">' + fp + '</div>';
+      };
 
-    img.onload = fit;
-    img.onerror = () => { canvas.innerHTML = '<div class="err"><div>Cannot load image</div><div style="font-size:11px;color:#666">Format not supported</div></div>'; };
-    img.src = 'file:///' + fp.replace(/^\/+/, '').replace(/\\/g, '/');
-
-    document.getElementById('in').onclick  = () => { scale = Math.min(scale * 1.2, 20); apply(); };
-    document.getElementById('out').onclick = () => { scale = Math.max(scale / 1.2, 0.05); apply(); };
-    document.getElementById('fit').onclick = fit;
-    document.getElementById('reset').onclick = () => { scale = 1; px = 0; py = 0; apply(); };
-
-    canvas.onmousedown = e => { if (e.button !== 0) return; dragging = true; mx = e.clientX - px; my = e.clientY - py; };
-    window.onmousemove = e => { if (!dragging) return; px = e.clientX - mx; py = e.clientY - my; apply(); };
-    window.onmouseup = () => { dragging = false; };
-
-    canvas.onwheel = e => {
-      e.preventDefault();
-      const d = e.deltaY > 0 ? 0.92 : 1.08;
-      const r = canvas.getBoundingClientRect();
-      const cx = e.clientX - r.left, cy = e.clientY - r.top;
-      const ns = Math.max(0.05, Math.min(20, scale * d));
-      px = cx - (cx - px) * (ns / scale);
-      py = cy - (cy - py) * (ns / scale);
-      scale = ns;
-      apply();
-    };
-    window.addEventListener('resize', fit);
+      // Notify parent of title
+      window.parent.postMessage({ type: 'omniview:title', title: name }, window.location.origin);
+    })();
   </script>
 </body>
 </html>

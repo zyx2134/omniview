@@ -198,20 +198,29 @@ ipcMain.handle('ext:check-conflict', (_e, m) => extensionManager.checkConflict(m
 // 鈹€鈹€鈹€ IPC: App info 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), name: app.getName() }));
 
-// ─── Second-instance handler (double-click from file explorer) ──────────────
-// requestSingleInstanceLock() returns false if another instance is already running.
-// When it returns false we quit; the existing instance receives 'second-instance'
-// with the new argv and opens the file there.
+// ─── Second-instance handler (double-click / right-click "Open with") ────────
+// When Windows Explorer opens a file via right-click → Open with → Omniview,
+// it launches argv = [exePath, filePath]. Since requestSingleInstanceLock()
+// prevents a second window, the existing instance receives 'second-instance'
+// and we open the file there instead.
+//
+// Windows may pass extra flags after the file (e.g. "--sandbox"), so we find
+// the FIRST non-exe argument that looks like an actual file path.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
+  // Another instance is already running — exit this one.
+  // The file will be opened by the existing instance via its 'second-instance' handler.
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    // Filter to actual file paths (skip Electron flags like --type=, --no-sandbox, etc.)
-    const fileArgs = argv.filter(a => !a.startsWith('--') && a.length > 1);
-    const fileArg = fileArgs.find(a =>
-      a.toLowerCase().endsWith('.dex') ||
-      /\.(png|jpe?g|gif|bmp|webp|apng|svg|pdf|mp4|webm|avi|mov|mkv|flv|wmv|mp3|wav|flac|ogg|m4a|aac|txt|md|json|xml|html|htm|css|js|ts|jsx|tsx|py|java|c|cpp|h|rs|go|rb|sh|bat|ini|yaml|yml|toml|csv|log|sql|qmc0|qmcflac|qmcogg|glb|gltf|obj|fbx|env|b64|heic|heif)$/i.test(a)
+    if (!mainWindow) return;
+    // Strip surrounding quotes (Windows sometimes adds them for paths with spaces)
+    const rawArgs = argv.map(a => a.replace(/^"|"$/g, ''));
+    // Find the first non-exe argument that looks like a file
+    const fileArg = rawArgs.find(a =>
+      !a.toLowerCase().endsWith('.exe') &&
+      (a.toLowerCase().endsWith('.dex') ||
+       /\.(png|jpe?g|gif|bmp|webp|apng|svg|pdf|mp4|webm|avi|mov|mkv|flv|wmv|mp3|wav|flac|ogg|m4a|aac|txt|md|json|xml|html|htm|css|js|ts|jsx|tsx|py|java|c|cpp|h|rs|go|rb|sh|bat|ini|yaml|yml|toml|csv|log|sql|qmc0|qmcflac|qmcogg|glb|gltf|obj|fbx|env|b64|heic|heif)$/i.test(a))
     );
     if (fileArg && mainWindow) {
       if (fileArg.toLowerCase().endsWith('.dex')) {
